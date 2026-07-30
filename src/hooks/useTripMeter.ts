@@ -111,7 +111,7 @@ export function useTripMeter() {
     pickupLocationRef.current = pickupLocation;
   }, [pickupLocation]);
 
-  // Route Options
+  // Route Options (Strict Expressway & Toll Avoidance Enabled for TukTuks)
   const [avoidTolls, setAvoidTolls] = useState<boolean>(true);
   const [routeType, setRouteType] = useState<'fastest' | 'shortest'>('fastest');
 
@@ -148,7 +148,7 @@ export function useTripMeter() {
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Reverse Geocode helper to convert current GPS coords to real street/city name
+  // Reverse Geocode helper
   const fetchReverseGeocode = useCallback(async (lat: number, lng: number) => {
     const key = `${lat.toFixed(3)},${lng.toFixed(3)}`;
     if (lastReverseGeocodedRef.current === key) return;
@@ -241,10 +241,12 @@ export function useTripMeter() {
     return Math.round(total);
   }, []);
 
-  // OSRM Real-Road Routing Engine & Estimates Calculation
+  // OSRM Real-Road Routing Engine (Strict Expressway & Toll Avoidance Enabled)
   const fetchOsrmRoute = useCallback(async (start: { lat: number, lng: number }, end: { lat: number, lng: number }) => {
     try {
-      const url = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`;
+      // Exclude expressways (motorway) and tolls strictly for Sri Lankan TukTuks
+      const excludeParam = avoidTolls ? '&exclude=toll,motorway' : '';
+      const url = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson${excludeParam}`;
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
@@ -265,7 +267,7 @@ export function useTripMeter() {
                 lat: c[1],
                 lng: c[0],
                 heading: h,
-                streetName: "Colombo Street Route",
+                streetName: "Sri Lanka Local Road Route (No Highway)",
               };
             });
             setFullNavPath(osrmPoints);
@@ -288,9 +290,9 @@ export function useTripMeter() {
       { lat: start.lat, lng: start.lng, heading: 0 },
       { lat: end.lat, lng: end.lng, heading: 0 },
     ]);
-  }, [tariff, calcEstimatedFare]);
+  }, [tariff, calcEstimatedFare, avoidTolls]);
 
-  // Fetch OSRM Route only when destination or tolls option changes (prevents continuous HTTP flooding on 1m moves)
+  // Fetch OSRM Route only when destination or tolls option changes
   useEffect(() => {
     if (destinationLocation) {
       fetchOsrmRoute(pickupLocationRef.current, destinationLocation);
@@ -302,7 +304,7 @@ export function useTripMeter() {
     }
   }, [destinationLocation, avoidTolls, fetchOsrmRoute, vehicleHeading]);
 
-  // Real Mobile GPS Tracking Handler (Optimized & Stable)
+  // Real Mobile GPS Tracking Handler
   useEffect(() => {
     if (!useRealGps) {
       if (watchIdRef.current !== null && typeof window !== 'undefined') {

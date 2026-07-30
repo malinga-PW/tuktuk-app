@@ -4,7 +4,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { RoutePoint, LocationItem, TripStatus } from '@/hooks/useTripMeter';
-import { Navigation, Navigation2, Layers, Crosshair, Eye, MapPin, X, CheckCircle2, Target, Loader2 } from 'lucide-react';
+import { Navigation, Layers, Crosshair, Eye, MapPin, X, CheckCircle2, Target, Loader2 } from 'lucide-react';
 import { meterAudio } from '@/utils/audio';
 
 // Custom Rotating Vehicle Navigation Arrow Icon
@@ -77,8 +77,8 @@ function RouteFitBoundsController({
   return null;
 }
 
-// Smooth Map Pan Controller
-function SmoothMapController({ center, zoomLevel }: { center: [number, number], zoomLevel?: number }) {
+// Smooth Map Pan Controller (normal GPS tracking)
+function SmoothMapController({ center }: { center: [number, number] }) {
   const map = useMap();
   const prevCenterRef = useRef<[number, number]>(center);
 
@@ -93,11 +93,19 @@ function SmoothMapController({ center, zoomLevel }: { center: [number, number], 
     }
   }, [center, map]);
 
+  return null;
+}
+
+// Re-Center & Zoom to Vehicle (triggered by button click)
+function RecenterController({ center, trigger }: { center: [number, number], trigger: number }) {
+  const map = useMap();
+
   useEffect(() => {
-    if (zoomLevel) {
-      map.setZoom(zoomLevel);
+    if (trigger > 0) {
+      map.flyTo(center, 18, { animate: true, duration: 0.8 });
     }
-  }, [zoomLevel, map]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trigger]);
 
   return null;
 }
@@ -163,7 +171,7 @@ export default function InteractiveMap({
   onTileStyleChange,
   onConfirmPinpoint,
 }: InteractiveMapProps) {
-  const [targetZoom, setTargetZoom] = useState<number>(15);
+  const [recenterTrigger, setRecenterTrigger] = useState<number>(0);
   const [showStyleMenu, setShowStyleMenu] = useState<boolean>(false);
   const [showLegend, setShowLegend] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState(destinationLocation ? destinationLocation.name : '');
@@ -202,8 +210,8 @@ export default function InteractiveMap({
   const drivenPolylineCoords: [number, number][] = routePath.map((p) => [p.lat, p.lng]);
 
   const handleCenterAndZoomIn = () => {
-    setTargetZoom(18);
-    meterAudio.speak("Map centered close-up.");
+    setRecenterTrigger(prev => prev + 1);
+    meterAudio.speak("Map centered.");
   };
 
   const handleClearDestination = () => {
@@ -229,12 +237,13 @@ export default function InteractiveMap({
       {/* Edge-to-edge 1:1 Leaflet Map */}
       <MapContainer
         center={[currentPosition.lat, currentPosition.lng]}
-        zoom={targetZoom}
+        zoom={15}
         zoomControl={false}
         className="w-full h-full z-0"
       >
-        <SmoothMapController center={[currentPosition.lat, currentPosition.lng]} zoomLevel={targetZoom} />
-        <RouteFitBoundsController pickup={currentPosition} destination={destinationLocation} status={status} zoomLevel={targetZoom} />
+        <SmoothMapController center={[currentPosition.lat, currentPosition.lng]} />
+        <RecenterController center={[currentPosition.lat, currentPosition.lng]} trigger={recenterTrigger} />
+        <RouteFitBoundsController pickup={currentPosition} destination={destinationLocation} status={status} zoomLevel={15} />
         <MapPinHandler />
 
         <TileLayer

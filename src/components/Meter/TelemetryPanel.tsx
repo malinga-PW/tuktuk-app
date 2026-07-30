@@ -71,6 +71,17 @@ export default function TelemetryPanel({
 }: TelemetryPanelProps) {
   const [showControlPanel, setShowControlPanel] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+
+  const handleResetClick = () => {
+    if (status === 'RUNNING' || status === 'PAUSED') return; // Disabled during trip
+    setConfirmReset(true);
+  };
+
+  const handleConfirmReset = () => {
+    onClearAll();
+    setConfirmReset(false);
+  };
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -152,14 +163,33 @@ export default function TelemetryPanel({
             <span>{isFullscreen ? 'EXIT' : '📺 FULL'}</span>
           </button>
 
-          <button
-            onClick={onClearAll}
-            className="px-2.5 py-1 rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/40 font-extrabold text-[10px] flex items-center space-x-1 transition-all shadow-md"
-            title="Fresh Start / Reset All"
-          >
-            <RotateCcw className="w-3 h-3" />
-            <span>RESET</span>
-          </button>
+          {confirmReset ? (
+            <div className="flex items-center space-x-1 px-2 py-1 rounded-xl bg-rose-600/90 border border-rose-400 animate-fadeIn">
+              <span className="text-[9px] font-black text-white">Sure?</span>
+              <button
+                onClick={handleConfirmReset}
+                className="px-2 py-0.5 rounded-lg bg-white text-rose-700 text-[9px] font-black"
+              >YES</button>
+              <button
+                onClick={() => setConfirmReset(false)}
+                className="px-2 py-0.5 rounded-lg bg-slate-700 text-white text-[9px] font-black"
+              >NO</button>
+            </div>
+          ) : (
+            <button
+              onClick={handleResetClick}
+              disabled={status === 'RUNNING' || status === 'PAUSED'}
+              className={`px-2.5 py-1 rounded-xl font-extrabold text-[10px] flex items-center space-x-1 transition-all shadow-md border ${
+                status === 'RUNNING' || status === 'PAUSED'
+                  ? 'opacity-30 cursor-not-allowed bg-slate-700/40 text-slate-500 border-slate-600/30'
+                  : 'bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30'
+              }`}
+              title={status === 'RUNNING' || status === 'PAUSED' ? 'Cannot reset during an active trip' : 'Fresh Start / Reset All'}
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>RESET</span>
+            </button>
+          )}
 
           <button
             onClick={() => setShowControlPanel(!showControlPanel)}
