@@ -133,7 +133,7 @@ export function useTripMeter() {
 
   // Tariff config state
   const [tariff, setTariff] = useState<TariffConfig>({
-    currency: 'LKR',
+    currency: 'Rs.',
     baseFare: 120,
     baseKmIncluded: 1.0,
     ratePerKm: 100,
@@ -241,11 +241,10 @@ export function useTripMeter() {
     return Math.round(total);
   }, []);
 
-  // OSRM Real-Road Routing Engine
-  // NOTE: Only 'exclude=motorway' is supported by the public OSRM demo server.
-  // This effectively avoids Sri Lanka expressways (E01, E03, Southern Expressway)
-  // which are all tagged as 'motorway' in OpenStreetMap.
-  // If exclude=motorway returns NoRoute, we retry without it (some routes have no alternative).
+  // Dual Routing Engine:
+  // - avoidTolls=true  → OpenRouteService (ORS) with avoid_features=["tollways","highways"]
+  // - avoidTolls=false → OSRM (fastest road route, no restrictions)
+  // ORS genuinely avoids toll roads; OSRM public server ignores the exclude parameter.
   const fetchOsrmRoute = useCallback(async (start: { lat: number, lng: number }, end: { lat: number, lng: number }) => {
     const buildRoute = (coords: [number, number][], label: string): RoutePoint[] =>
       coords.map((c, idx) => {
@@ -253,51 +252,71 @@ export function useTripMeter() {
         return { lat: c[1], lng: c[0], heading: getBearing(c[1], c[0], nextC[1], nextC[0]), streetName: label };
       });
 
-    const tryFetch = async (exclude: boolean) => {
-      const excludeParam = exclude ? '&exclude=motorway' : '';
-      const url = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson&steps=true${excludeParam}`;
+    // --- ORS (OpenRouteService) for No-Highway mode ---
+    if (avoidTolls) {
       try {
-        const res = await fetch(url);
-        if (!res.ok) { console.error('[OSRM] HTTP error:', res.status); return null; }
-        const data = await res.json();
-        if (data.code === 'Ok' && data.routes?.[0]) return data.routes[0];
-        console.warn('[OSRM] No route:', data.code, data.message);
-        return null;
+        const orsUrl = 'https://api.openrouteservice.org/v2/directions/driving-car/geojson';
+        const orsBody = {
+          coordinates: [[start.lng, start.lat], [end.lng, end.lat]],
+          options: { avoid_features: ['tollways', 'highways'] },
+        };
+        const orsRes = await fetch(orsUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': '5b3ce3597851110001cf6248c0ec5e34a4944d1db1fc95cfe94c6b37' },
+          body: JSON.stringify(orsBody),
+        });
+        if (orsRes.ok) {
+          const orsData = await orsRes.json();
+          const feature = orsData?.features?.[0];
+          if (feature?.geometry?.coordinates?.length > 1) {
+            const props = feature.properties?.summary;
+            const distKm = (props?.distance ?? 0) / 1000;
+            const durMins = Math.round((props?.duration ?? 0) / 60);
+            setEstimatedDistanceKm(distKm);
+            setEstimatedDurationMins(durMins);
+            setEstimatedFare(calcEstimatedFare(distKm, tariff));
+            const orsPoints = buildRoute(feature.geometry.coordinates, 'Local Road (No Toll/Highway)');
+            setFullNavPath(orsPoints);
+            setRouteIndex(0);
+            setRoutePath([orsPoints[0]]);
+            return;
+          }
+        } else {
+          console.warn('[ORS] HTTP error:', orsRes.status, '— falling back to OSRM');
+        }
       } catch (err) {
-        console.error('[OSRM] Fetch failed:', err);
-        return null;
-      }
-    };
-
-    // First attempt: with exclude=motorway if avoidTolls enabled
-    let route = avoidTolls ? await tryFetch(true) : null;
-    let usedAvoid = !!route;
-
-    // Retry without exclude if first attempt failed (NoRoute / any error)
-    if (!route) {
-      route = await tryFetch(false);
-      usedAvoid = false;
-    }
-
-    if (route) {
-      const distKm = route.distance / 1000;
-      const durMins = Math.round(route.duration / 60);
-      setEstimatedDistanceKm(distKm);
-      setEstimatedDurationMins(durMins);
-      setEstimatedFare(calcEstimatedFare(distKm, tariff));
-
-      if (route.geometry?.coordinates?.length > 1) {
-        const label = usedAvoid ? 'Local Road (No Expressway)' : 'Sri Lanka Road';
-        const osrmPoints = buildRoute(route.geometry.coordinates, label);
-        setFullNavPath(osrmPoints);
-        setRouteIndex(0);
-        setRoutePath([osrmPoints[0]]);
-        return;
+        console.warn('[ORS] Failed:', err, '— falling back to OSRM');
       }
     }
 
-    // Straight-line LAST resort — only if OSRM completely unreachable
-    console.error('[OSRM] All attempts failed — using straight-line fallback');
+    // --- OSRM for normal routing (or ORS fallback) ---
+    try {
+      const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson&steps=true`;
+      const res = await fetch(osrmUrl);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.code === 'Ok' && data.routes?.[0]) {
+          const route = data.routes[0];
+          const distKm = route.distance / 1000;
+          const durMins = Math.round(route.duration / 60);
+          setEstimatedDistanceKm(distKm);
+          setEstimatedDurationMins(durMins);
+          setEstimatedFare(calcEstimatedFare(distKm, tariff));
+          if (route.geometry?.coordinates?.length > 1) {
+            const osrmPoints = buildRoute(route.geometry.coordinates, 'Sri Lanka Road');
+            setFullNavPath(osrmPoints);
+            setRouteIndex(0);
+            setRoutePath([osrmPoints[0]]);
+            return;
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[OSRM] Fetch failed:', err);
+    }
+
+    // Straight-line LAST resort — only if both APIs unreachable
+    console.error('[Routing] All engines failed — using straight-line fallback');
     const fallbackDist = getHaversineDistance(start.lat, start.lng, end.lat, end.lng);
     setEstimatedDistanceKm(fallbackDist);
     setEstimatedDurationMins(Math.round((fallbackDist / 25) * 60));

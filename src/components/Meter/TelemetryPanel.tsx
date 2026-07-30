@@ -316,7 +316,7 @@ export default function TelemetryPanel({
           <div className="w-full flex items-center justify-between text-[10px] uppercase tracking-widest font-black text-cyan-300">
             <div className="flex items-center space-x-1">
               <Zap className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
-              <span>TOTAL FARE ({tariff.currency})</span>
+              <span>TOTAL FARE (Rs.)</span>
             </div>
             {isPreTripEstimate && (
               <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-400 text-[8px] border border-amber-500/40 font-mono animate-pulse">
@@ -325,12 +325,11 @@ export default function TelemetryPanel({
             )}
           </div>
 
-          <div className="flex items-baseline space-x-1 my-1">
-            <span className="text-2xl font-black text-cyan-400">{tariff.currency}</span>
+          <div className="flex items-baseline space-x-0.5 my-1">
+            <span className="text-xl font-black text-cyan-400 mr-0.5">Rs.</span>
             <span className="text-6xl sm:text-7xl lg:text-8xl font-black tracking-tighter font-mono glow-cyan leading-none">
               {displayFare.toLocaleString('en-US')}
             </span>
-            <span className="text-lg font-bold text-slate-400">.00</span>
           </div>
 
           <div className="w-full pt-1.5 border-t border-white/10 flex items-center justify-between px-1">

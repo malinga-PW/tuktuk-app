@@ -68,7 +68,7 @@ export default function TripHistoryModal({
 
           <div className="p-2 glass-card rounded-xl border border-cyan-500/30 flex flex-col items-center">
             <span className="text-[8px] font-bold text-slate-400 uppercase">Total Revenue</span>
-            <span className="text-lg font-black font-mono text-cyan-300 mt-0.5">LKR {totalEarnings.toLocaleString()}</span>
+            <span className="text-lg font-black font-mono text-cyan-300 mt-0.5">Rs. {totalEarnings.toLocaleString()}</span>
           </div>
 
           <div className="p-2 glass-card rounded-xl border border-amber-500/30 flex flex-col items-center">
