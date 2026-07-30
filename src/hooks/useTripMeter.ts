@@ -101,9 +101,15 @@ export function useTripMeter() {
 
   // Locations state
   const [pickupLocation, setPickupLocation] = useState<LocationItem>(INITIAL_REAL_GPS_PICKUP);
+  const pickupLocationRef = useRef<LocationItem>(INITIAL_REAL_GPS_PICKUP);
   const [destinationLocation, setDestinationLocation] = useState<LocationItem | null>(null);
   const [isPinpointDraggingMode, setIsPinpointDraggingMode] = useState<boolean>(false);
   const [mapCenterCoords, setMapCenterCoords] = useState<{ lat: number, lng: number }>({ lat: INITIAL_REAL_GPS_PICKUP.lat, lng: INITIAL_REAL_GPS_PICKUP.lng });
+
+  // Sync pickup ref
+  useEffect(() => {
+    pickupLocationRef.current = pickupLocation;
+  }, [pickupLocation]);
 
   // Route Options
   const [avoidTolls, setAvoidTolls] = useState<boolean>(true);
@@ -284,18 +290,19 @@ export function useTripMeter() {
     ]);
   }, [tariff, calcEstimatedFare]);
 
+  // Fetch OSRM Route only when destination or tolls option changes (prevents continuous HTTP flooding on 1m moves)
   useEffect(() => {
     if (destinationLocation) {
-      fetchOsrmRoute(pickupLocation, destinationLocation);
+      fetchOsrmRoute(pickupLocationRef.current, destinationLocation);
     } else {
       setEstimatedDistanceKm(0);
       setEstimatedDurationMins(0);
       setEstimatedFare(0);
-      setFullNavPath([{ lat: pickupLocation.lat, lng: pickupLocation.lng, heading: vehicleHeading, streetName: pickupLocation.name }]);
+      setFullNavPath([{ lat: pickupLocationRef.current.lat, lng: pickupLocationRef.current.lng, heading: vehicleHeading, streetName: pickupLocationRef.current.name }]);
     }
-  }, [pickupLocation, destinationLocation, avoidTolls, fetchOsrmRoute, vehicleHeading]);
+  }, [destinationLocation, avoidTolls, fetchOsrmRoute, vehicleHeading]);
 
-  // Real Mobile GPS Tracking Handler
+  // Real Mobile GPS Tracking Handler (Optimized & Stable)
   useEffect(() => {
     if (!useRealGps) {
       if (watchIdRef.current !== null && typeof window !== 'undefined') {
@@ -356,7 +363,7 @@ export function useTripMeter() {
                 meterAudio.playTick();
               }
             }
-            return [...prev, { lat: latitude, lng: longitude, heading: currentHeading, streetName: pickupLocation.name }];
+            return [...prev, { lat: latitude, lng: longitude, heading: currentHeading, streetName: pickupLocationRef.current.name }];
           });
         }
       },
@@ -379,7 +386,7 @@ export function useTripMeter() {
         navigator.geolocation.clearWatch(watchIdRef.current);
       }
     };
-  }, [useRealGps, status, vehicleHeading, fetchReverseGeocode, pickupLocation.name]);
+  }, [useRealGps, status, fetchReverseGeocode]);
 
   // Multi-Engine Search
   const searchPlaces = useCallback(async (query: string) => {
