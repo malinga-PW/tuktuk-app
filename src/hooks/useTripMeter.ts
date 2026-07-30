@@ -386,7 +386,31 @@ export function useTripMeter() {
     setGpsError(null);
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
-        const { latitude, longitude, speed, heading } = pos.coords;
+        const { latitude, longitude, speed, heading, accuracy } = pos.coords;
+
+        // --- FILTER 1: Reject low-accuracy GPS readings (weak satellite lock) ---
+        // accuracy = radius in meters. >40m = unreliable, skip it.
+        if (accuracy > 40) {
+          setGpsError(`GPS Signal Weak (accuracy: ±${Math.round(accuracy)}m — waiting...)`);
+          return;
+        }
+        setGpsError(null);
+
+        // --- FILTER 2: Reject impossible speed jumps (GPS outlier teleport) ---
+        // Calculate implied speed from last known position + time elapsed.
+        const now = Date.now();
+        if (prevCoordsRef.current) {
+          const deltaKm = getHaversineDistance(prevCoordsRef.current.lat, prevCoordsRef.current.lng, latitude, longitude);
+          const lastTime = (prevCoordsRef.current as { lat: number; lng: number; ts?: number }).ts ?? now;
+          const deltaSec = (now - lastTime) / 1000;
+          const impliedSpeedKmH = deltaSec > 0 ? (deltaKm / deltaSec) * 3600 : 0;
+          if (impliedSpeedKmH > 150) {
+            // GPS jumped unrealistically fast — discard this reading
+            console.warn(`[GPS] Outlier rejected: implied ${Math.round(impliedSpeedKmH)} km/h, Δ${(deltaKm * 1000).toFixed(0)}m in ${deltaSec.toFixed(1)}s`);
+            return;
+          }
+        }
+
         const speedKmH = speed ? Math.round(speed * 3.6) : 0;
         setCurrentSpeed(speedKmH);
 
@@ -406,7 +430,7 @@ export function useTripMeter() {
           }
         }
         setVehicleHeading(currentHeading);
-        prevCoordsRef.current = { lat: latitude, lng: longitude };
+        (prevCoordsRef.current as { lat: number; lng: number; ts?: number }) = { lat: latitude, lng: longitude, ts: now };
 
         fetchReverseGeocode(latitude, longitude);
 
@@ -415,18 +439,18 @@ export function useTripMeter() {
             const lastPt = prev[prev.length - 1];
             if (lastPt) {
               const deltaKm = getHaversineDistance(lastPt.lat, lastPt.lng, latitude, longitude);
-              if (deltaKm > 0.003) {
-                setDistanceKm((d) => {
-                  const newDist = d + deltaKm;
-                  const currentKmFloor = Math.floor(newDist);
-                  if (currentKmFloor > lastAnnouncedKmRef.current && currentKmFloor >= 1) {
-                    lastAnnouncedKmRef.current = currentKmFloor;
-                    meterAudio.speak(`${currentKmFloor} kilometer completed.`);
-                  }
-                  return newDist;
-                });
-                meterAudio.playTick();
-              }
+              // --- FILTER 3: Only add point if moved > 5m (ignore GPS jitter) ---
+              if (deltaKm < 0.005) return prev;
+              setDistanceKm((d) => {
+                const newDist = d + deltaKm;
+                const currentKmFloor = Math.floor(newDist);
+                if (currentKmFloor > lastAnnouncedKmRef.current && currentKmFloor >= 1) {
+                  lastAnnouncedKmRef.current = currentKmFloor;
+                  meterAudio.speak(`${currentKmFloor} kilometer completed.`);
+                }
+                return newDist;
+              });
+              meterAudio.playTick();
             }
             return [...prev, { lat: latitude, lng: longitude, heading: currentHeading, streetName: pickupLocationRef.current.name }];
           });
@@ -442,7 +466,7 @@ export function useTripMeter() {
       {
         enableHighAccuracy: true,
         timeout: 30000,
-        maximumAge: 5000,
+        maximumAge: 2000,   // reduced from 5000 — fresher readings only
       }
     );
 
