@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { RoutePoint, LocationItem } from '@/hooks/useTripMeter';
+import { RoutePoint, LocationItem, TripStatus } from '@/hooks/useTripMeter';
 import { Navigation, Navigation2, Layers, Crosshair, Eye, MapPin, X, CheckCircle2, Target, Loader2, Zap, Clock } from 'lucide-react';
 import { meterAudio } from '@/utils/audio';
 
@@ -40,6 +40,43 @@ const destIcon = L.divIcon({
   iconAnchor: [16, 32],
 });
 
+// Fit Bounds Controller (Fits Start + Destination on map set, Switches to close-up on Ride Start)
+function RouteFitBoundsController({
+  pickup,
+  destination,
+  status,
+  zoomLevel,
+}: {
+  pickup: RoutePoint;
+  destination: LocationItem | null;
+  status: TripStatus;
+  zoomLevel: number;
+}) {
+  const map = useMap();
+  const hasFitRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    if (destination && status === 'IDLE' && !hasFitRef.current) {
+      const bounds = L.latLngBounds(
+        [pickup.lat, pickup.lng],
+        [destination.lat, destination.lng]
+      );
+      map.fitBounds(bounds, { padding: [50, 50], animate: true, duration: 1.2 });
+      hasFitRef.current = true;
+    } else if (!destination) {
+      hasFitRef.current = false;
+    }
+  }, [destination, pickup, status, map]);
+
+  useEffect(() => {
+    if (status === 'RUNNING') {
+      map.setZoom(17, { animate: true });
+    }
+  }, [status, map]);
+
+  return null;
+}
+
 // Smooth Map Pan Controller
 function SmoothMapController({ center, zoomLevel }: { center: [number, number], zoomLevel?: number }) {
   const map = useMap();
@@ -66,7 +103,7 @@ function SmoothMapController({ center, zoomLevel }: { center: [number, number], 
 }
 
 // Leaflet Map Reference Capture & Pin Handler
-function MapPinHandler({ onConfirmPin, isPinpointMode }: { onConfirmPin: (lat: number, lng: number) => void, isPinpointMode: boolean }) {
+function MapPinHandler() {
   const map = useMap();
   
   useEffect(() => {
@@ -77,6 +114,7 @@ function MapPinHandler({ onConfirmPin, isPinpointMode }: { onConfirmPin: (lat: n
 }
 
 interface InteractiveMapProps {
+  status: TripStatus;
   currentPosition: RoutePoint;
   routePath: RoutePoint[];
   fullNavPath: RoutePoint[];
@@ -107,6 +145,7 @@ interface InteractiveMapProps {
 }
 
 export default function InteractiveMap({
+  status,
   currentPosition,
   routePath,
   fullNavPath,
@@ -199,7 +238,8 @@ export default function InteractiveMap({
         className="w-full h-full z-0"
       >
         <SmoothMapController center={[currentPosition.lat, currentPosition.lng]} zoomLevel={targetZoom} />
-        <MapPinHandler onConfirmPin={() => {}} isPinpointMode={isPinpointDraggingMode} />
+        <RouteFitBoundsController pickup={currentPosition} destination={destinationLocation} status={status} zoomLevel={targetZoom} />
+        <MapPinHandler />
 
         <TileLayer
           attribution='&copy; OpenStreetMap'

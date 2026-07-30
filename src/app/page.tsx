@@ -80,6 +80,7 @@ export default function Home() {
       {/* Left Panel: Edge-to-Edge 1:1 Square Map Container with Overlaid Search & Drag Pin */}
       <section className="h-full aspect-square shrink-0 relative overflow-hidden bg-slate-950">
         <InteractiveMap
+          status={status}
           currentPosition={currentPosition}
           routePath={routePath}
           fullNavPath={fullNavPath}
