@@ -9,10 +9,10 @@ export interface TariffConfig {
   baseKmIncluded: number; // KM included in base fare (e.g., 1.0 km)
   ratePerKm: number;      // Fare per km after base (e.g., LKR 100/km)
   waitRatePerMin: number; // Fare per min idle/waiting (e.g., LKR 6/min)
-  isNightTariff: boolean; // 20% night surcharge
-  nightMultiplier: number;// Default 1.2 (20%)
-  acSurcharge: number;    // LKR 50
-  luggageSurcharge: number;// LKR 100
+  isNightTariff: boolean;
+  nightMultiplier: number;
+  acSurcharge: number;
+  luggageSurcharge: number;
   isAcEnabled: boolean;
   isLuggageEnabled: boolean;
 }
@@ -35,8 +35,8 @@ export interface LocationItem {
 
 export const INITIAL_REAL_GPS_PICKUP: LocationItem = {
   id: 'pickup-gps-auto',
-  name: 'Detecting Real GPS Location...',
-  address: 'Fetching device hardware GPS...',
+  name: 'Current GPS Location',
+  address: 'Live device location',
   lat: 6.92712,
   lng: 79.86120,
 };
@@ -70,11 +70,12 @@ export function useTripMeter() {
   const [isHudMirrored, setIsHudMirrored] = useState<boolean>(false);
 
   // Real Mobile GPS state
-  const [useRealGps, setUseRealGps] = useState<boolean>(true); // Active by default
+  const [useRealGps, setUseRealGps] = useState<boolean>(true);
   const [gpsError, setGpsError] = useState<string | null>(null);
   const watchIdRef = useRef<number | null>(null);
+  const wakeLockRef = useRef<unknown | null>(null);
 
-  // Locations state (Real GPS Auto-Detect)
+  // Locations state
   const [pickupLocation, setPickupLocation] = useState<LocationItem>(INITIAL_REAL_GPS_PICKUP);
   const [destinationLocation, setDestinationLocation] = useState<LocationItem | null>(DEFAULT_DESTINATION);
   const [isPinpointDraggingMode, setIsPinpointDraggingMode] = useState<boolean>(false);
@@ -84,7 +85,7 @@ export function useTripMeter() {
   const [avoidTolls, setAvoidTolls] = useState<boolean>(true);
   const [routeType, setRouteType] = useState<'fastest' | 'shortest'>('fastest');
 
-  // Navigation route path state (OSRM Real Road Geometries)
+  // Navigation route path state
   const [fullNavPath, setFullNavPath] = useState<RoutePoint[]>([
     { lat: INITIAL_REAL_GPS_PICKUP.lat, lng: INITIAL_REAL_GPS_PICKUP.lng, streetName: INITIAL_REAL_GPS_PICKUP.name },
     { lat: DEFAULT_DESTINATION.lat, lng: DEFAULT_DESTINATION.lng, streetName: DEFAULT_DESTINATION.name },
@@ -118,8 +119,20 @@ export function useTripMeter() {
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Screen Wake Lock API (Always On Display)
+  const requestWakeLock = async () => {
+    try {
+      if (typeof window !== 'undefined' && 'wakeLock' in navigator) {
+        wakeLockRef.current = await (navigator as unknown as { wakeLock: { request: (type: string) => Promise<unknown> } }).wakeLock.request('screen');
+      }
+    } catch {
+      // Ignore wake lock error
+    }
+  };
+
   // Auto-Detect Real Mobile GPS Location on App Load
   useEffect(() => {
+    requestWakeLock();
     if (typeof window !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
@@ -134,9 +147,7 @@ export function useTripMeter() {
           setPickupLocation(realPickup);
           setRoutePath([{ lat: latitude, lng: longitude, streetName: 'Current Location' }]);
         },
-        () => {
-          // Keep default if permission denied
-        },
+        () => {},
         { enableHighAccuracy: true, timeout: 10000 }
       );
     }
@@ -307,6 +318,7 @@ export function useTripMeter() {
   }, [distanceKm, waitingSeconds, tariff]);
 
   const startTrip = () => {
+    requestWakeLock();
     setStatus('RUNNING');
     meterAudio.playStartChime();
   };
@@ -365,7 +377,7 @@ export function useTripMeter() {
     setIsPinpointDraggingMode(false);
   };
 
-  // Main Simulation Loop (active when Real Mobile GPS is OFF)
+  // Main Simulation Loop
   useEffect(() => {
     if (status !== 'RUNNING' || useRealGps) {
       if (timerRef.current) clearInterval(timerRef.current);

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { TripStatus, TariffConfig, LocationItem } from '@/hooks/useTripMeter';
-import { Play, Pause, Square, RotateCcw, Settings, Receipt, Volume2, VolumeX, Moon, Zap, Luggage, Wind, Eye, Sliders, Plus, Minus, MapPin, Navigation, Search, Target, CheckCircle2, ShieldAlert, Navigation2, Loader2, Trash2, X, Radio } from 'lucide-react';
+import { Play, Pause, Square, RotateCcw, Settings, Receipt, Volume2, VolumeX, Zap, Sliders, Plus, Minus, MapPin, Navigation, Target, CheckCircle2, ShieldAlert, Loader2, X, Radio, Clock, Navigation2 } from 'lucide-react';
 
 interface TelemetryPanelProps {
   status: TripStatus;
@@ -121,11 +121,11 @@ export default function TelemetryPanel({
   };
 
   return (
-    <div className={`w-full h-full flex flex-col justify-between p-2.5 sm:p-3.5 glass-panel rounded-2xl border border-white/10 ${isHudMirrored ? 'hud-mirror' : ''}`}>
-      {/* Header Bar: Status Badge + Real Mobile GPS Toggle */}
-      <div className="flex items-center justify-between pb-1.5 border-b border-white/10">
+    <div className={`w-full h-full flex flex-col justify-between p-2 glass-panel rounded-2xl border border-white/10 ${isHudMirrored ? 'hud-mirror' : ''}`}>
+      {/* 1. Header Bar: Status Badge + GPS Toggle + Reset + Control Drawers (Ultra Compact) */}
+      <div className="flex items-center justify-between pb-1 border-b border-white/10 shrink-0">
         <div className="flex items-center space-x-1.5">
-          <div className={`px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider flex items-center space-x-1 ${
+          <div className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider flex items-center space-x-1 ${
             status === 'RUNNING' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 animate-pulse' :
             status === 'PAUSED' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' :
             status === 'FINISHED' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40' :
@@ -141,103 +141,73 @@ export default function TelemetryPanel({
 
           <button
             onClick={onToggleRealGps}
-            className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider flex items-center space-x-1 transition-all border ${
+            className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase flex items-center space-x-1 transition-all border ${
               useRealGps
                 ? 'bg-emerald-500/30 text-emerald-300 border-emerald-500/50 shadow-md shadow-emerald-500/20 animate-pulse'
-                : 'glass-pill text-slate-400 border-white/10 hover:text-white'
+                : 'glass-pill text-slate-400 border-white/10'
             }`}
-            title="OPPO F11 / Mobile Device GPS Tracking"
+            title="Toggle Phone Hardware GPS"
           >
-            <Radio className={`w-3 h-3 ${useRealGps ? 'text-emerald-400' : 'text-slate-500'}`} />
-            <span>{useRealGps ? '📡 PHONE GPS' : '📱 PHONE GPS'}</span>
+            <Radio className={`w-2.5 h-2.5 ${useRealGps ? 'text-emerald-400' : 'text-slate-500'}`} />
+            <span>{useRealGps ? 'REAL GPS' : 'SIM GPS'}</span>
           </button>
         </div>
 
-        {/* Quick Utility Icons & Fresh Start Button */}
         <div className="flex items-center space-x-1">
           <button
             onClick={() => {
               setSearchQuery('');
               onClearAll();
             }}
-            className="px-2 py-1 rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 font-extrabold text-[10px] flex items-center space-x-1 transition-all"
-            title="Fresh Start / Clear All Trip Data"
+            className="px-2 py-0.5 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/40 font-extrabold text-[9px] flex items-center space-x-1 transition-all"
+            title="Fresh Start / Reset All"
           >
-            <RotateCcw className="w-3 h-3" />
+            <RotateCcw className="w-2.5 h-2.5" />
             <span>RESET</span>
           </button>
 
           <button
             onClick={() => setShowControlPanel(!showControlPanel)}
-            className={`p-1.5 rounded-xl text-xs font-bold transition-all border ${
-              showControlPanel ? 'bg-cyan-500 text-slate-950 border-cyan-400' : 'glass-card text-slate-300 hover:text-white'
+            className={`p-1 rounded-lg text-xs font-bold border ${
+              showControlPanel ? 'bg-cyan-500 text-slate-950 border-cyan-400' : 'glass-card text-slate-300'
             }`}
             title="Rate Control Drawer"
           >
-            <Sliders className="w-3.5 h-3.5" />
-          </button>
-
-          <button
-            onClick={onToggleMirror}
-            title="Mirror Display (Windshield HUD)"
-            className={`p-1.5 rounded-xl text-xs font-bold transition-all ${
-              isHudMirrored ? 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/30' : 'glass-card text-slate-300 hover:text-white'
-            }`}
-          >
-            <Eye className="w-3.5 h-3.5" />
-          </button>
-
-          <button
-            onClick={onToggleMute}
-            title={isAudioMuted ? 'Unmute Audio' : 'Mute Audio'}
-            className="p-1.5 glass-card rounded-xl text-slate-300 hover:text-white transition-all"
-          >
-            {isAudioMuted ? <VolumeX className="w-3.5 h-3.5 text-slate-500" /> : <Volume2 className="w-3.5 h-3.5 text-cyan-400" />}
+            <Sliders className="w-3 h-3" />
           </button>
 
           <button
             onClick={onOpenTariffModal}
-            title="Detailed Rate Settings Modal"
-            className="p-1.5 glass-card rounded-xl text-slate-300 hover:text-white transition-all hover:rotate-45"
+            title="Tariff Settings"
+            className="p-1 glass-card rounded-lg text-slate-300 hover:rotate-45"
           >
-            <Settings className="w-3.5 h-3.5 text-amber-400" />
+            <Settings className="w-3 h-3 text-amber-400" />
           </button>
         </div>
       </div>
 
       {gpsError && (
-        <div className="my-1 p-1.5 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-300 text-[10px] font-mono flex items-center space-x-1.5">
-          <ShieldAlert className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
-          <span>{gpsError}</span>
+        <div className="my-0.5 p-1 rounded-lg bg-rose-500/20 text-rose-300 text-[9px] font-mono flex items-center space-x-1">
+          <ShieldAlert className="w-3 h-3 text-rose-400 flex-shrink-0" />
+          <span className="truncate">{gpsError}</span>
         </div>
       )}
 
-      {/* Pickup & Destination Search Section (OPPO F11 Height Optimized) */}
-      <div className="my-1.5 p-2 sm:p-2.5 glass-card rounded-2xl border border-white/10 space-y-1.5 relative">
-        <div className="flex items-center space-x-2 text-xs">
-          <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
-            <Navigation className="w-3 h-3 fill-emerald-400" />
+      {/* 2. Pickup & Destination INLINE Horizontal Split Row */}
+      <div className="my-1 p-1.5 glass-card rounded-xl border border-white/10 grid grid-cols-12 gap-1.5 items-center relative shrink-0">
+        {/* Pickup (Left 5 Cols) */}
+        <div className="col-span-5 flex items-center space-x-1 overflow-hidden border-r border-white/10 pr-1">
+          <Navigation className="w-3 h-3 text-emerald-400 flex-shrink-0 fill-emerald-400" />
+          <div className="overflow-hidden">
+            <div className="text-[8px] uppercase font-black text-slate-400 tracking-wider">Pickup</div>
+            <div className="text-[10px] font-bold text-white truncate">{pickupLocation.name}</div>
           </div>
-          <div className="flex-1 overflow-hidden">
-            <div className="text-[9px] uppercase font-extrabold text-slate-400 tracking-wider">Pickup (Road)</div>
-            <div className="text-xs font-bold text-white truncate">{pickupLocation.name}</div>
-          </div>
-          <span className="px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 text-[9px] font-mono">
-            {useRealGps ? 'REAL GPS' : 'FIXED'}
-          </span>
         </div>
 
-        <div className="border-t border-white/10 my-0.5"></div>
-
-        <div className="flex items-center space-x-2 text-xs">
-          <div className="w-5 h-5 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center font-bold">
-            <MapPin className="w-3 h-3 fill-rose-400" />
-          </div>
+        {/* Destination Search (Right 7 Cols) */}
+        <div className="col-span-7 flex items-center space-x-1">
+          <MapPin className="w-3 h-3 text-rose-400 flex-shrink-0 fill-rose-400" />
           <div className="flex-1 relative">
-            <div className="text-[9px] uppercase font-extrabold text-slate-400 tracking-wider flex items-center justify-between">
-              <span>Destination</span>
-              {isSearchingPlaces && <Loader2 className="w-3 h-3 text-cyan-400 animate-spin" />}
-            </div>
             <div className="flex items-center space-x-1 relative">
               <input
                 type="text"
@@ -247,13 +217,13 @@ export default function TelemetryPanel({
                   setIsSearchOpen(true);
                 }}
                 onFocus={() => setIsSearchOpen(true)}
-                placeholder="Search place in Sri Lanka..."
-                className="w-full bg-slate-900/90 border border-white/15 px-2 py-0.5 pr-6 rounded-lg text-xs font-bold text-white focus:outline-none focus:border-cyan-400"
+                placeholder="Search place in SL..."
+                className="w-full bg-slate-900/90 border border-white/15 px-1.5 py-0.5 pr-5 rounded-md text-[10px] font-bold text-white focus:outline-none focus:border-cyan-400"
               />
               {searchQuery && (
                 <button
                   onClick={handleClearDestination}
-                  className="absolute right-1.5 p-0.5 text-slate-400 hover:text-white transition-colors"
+                  className="absolute right-1 text-slate-400 hover:text-white"
                   title="Clear Destination"
                 >
                   <X className="w-3 h-3" />
@@ -261,8 +231,9 @@ export default function TelemetryPanel({
               )}
             </div>
 
+            {/* Dropdown Live Search Results */}
             {isSearchOpen && searchResults.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 z-50 glass-panel rounded-xl border border-cyan-500/40 max-h-40 overflow-y-auto shadow-2xl p-1 bg-slate-950">
+              <div className="absolute top-full left-0 right-0 mt-1 z-50 glass-panel rounded-xl border border-cyan-500/40 max-h-36 overflow-y-auto shadow-2xl p-1 bg-slate-950">
                 {searchResults.map((item) => (
                   <button
                     key={item.id}
@@ -271,13 +242,13 @@ export default function TelemetryPanel({
                       setSearchQuery(item.name);
                       setIsSearchOpen(false);
                     }}
-                    className="w-full text-left p-1.5 hover:bg-cyan-500/20 rounded-lg flex items-center justify-between text-xs transition-colors border-b border-white/5 last:border-0"
+                    className="w-full text-left p-1 hover:bg-cyan-500/20 rounded-md flex items-center justify-between text-[10px] transition-colors border-b border-white/5 last:border-0"
                   >
-                    <div className="overflow-hidden mr-2">
-                      <div className="font-bold text-white truncate text-[11px]">{item.name}</div>
-                      <div className="text-[9px] text-slate-400 font-mono truncate">{item.address}</div>
+                    <div className="overflow-hidden mr-1">
+                      <div className="font-bold text-white truncate text-[10px]">{item.name}</div>
+                      <div className="text-[8px] text-slate-400 font-mono truncate">{item.address}</div>
                     </div>
-                    <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
+                    <CheckCircle2 className="w-3 h-3 text-cyan-400 flex-shrink-0" />
                   </button>
                 ))}
               </div>
@@ -286,222 +257,179 @@ export default function TelemetryPanel({
 
           <button
             onClick={onTogglePinpointMode}
-            className={`px-2 py-1 rounded-lg text-[9px] font-extrabold transition-all border flex items-center space-x-1 ${
+            className={`px-1.5 py-0.5 rounded text-[8px] font-black transition-all border shrink-0 ${
               isPinpointDraggingMode
                 ? 'bg-rose-500 text-white border-rose-400 animate-pulse'
-                : 'glass-pill text-cyan-300 border-cyan-500/30 hover:border-cyan-400'
+                : 'glass-pill text-cyan-300 border-cyan-500/30'
             }`}
-            title="Drag Map Center to Pinpoint Destination"
+            title="Drag Map Center"
           >
-            <Target className="w-3 h-3" />
-            <span>{isPinpointDraggingMode ? 'PINNING' : 'DRAG PIN'}</span>
+            {isPinpointDraggingMode ? 'PINNING' : 'DRAG PIN'}
           </button>
         </div>
       </div>
 
-      {/* Collapsible Rate Control Panel Drawer */}
+      {/* Rate Control Drawer */}
       {showControlPanel && (
-        <div className="my-1 p-2 glass-card rounded-2xl border border-cyan-500/30 space-y-1 animate-fadeIn bg-slate-900/90 shadow-xl">
-          <div className="flex items-center justify-between text-[10px] font-bold text-cyan-300 pb-0.5 border-b border-white/10">
-            <span className="flex items-center space-x-1">
-              <Sliders className="w-3 h-3" />
-              <span>RATE CONTROLLER</span>
-            </span>
-          </div>
-
-          <div className="grid grid-cols-3 gap-1.5 pt-0.5">
-            <div className="p-1.5 bg-slate-950/70 rounded-xl border border-white/10 flex flex-col items-center">
-              <span className="text-[9px] font-bold text-slate-400 uppercase">Base</span>
+        <div className="my-0.5 p-1.5 glass-card rounded-xl border border-cyan-500/30 space-y-1 animate-fadeIn bg-slate-900/90 shadow-xl shrink-0">
+          <div className="grid grid-cols-3 gap-1">
+            <div className="p-1 bg-slate-950/70 rounded-lg border border-white/10 flex flex-col items-center">
+              <span className="text-[8px] font-bold text-slate-400 uppercase">Base</span>
               <div className="flex items-center space-x-1 my-0.5">
-                <button onClick={() => adjustBaseFare(-10)} className="w-5 h-5 rounded glass-card text-amber-400 font-bold flex items-center justify-center">
-                  <Minus className="w-2.5 h-2.5" />
-                </button>
+                <button onClick={() => adjustBaseFare(-10)} className="w-4 h-4 rounded glass-card text-amber-400 font-bold flex items-center justify-center text-[10px]">-</button>
                 <span className="text-xs font-black font-mono text-white">{tariff.baseFare}</span>
-                <button onClick={() => adjustBaseFare(10)} className="w-5 h-5 rounded glass-card text-emerald-400 font-bold flex items-center justify-center">
-                  <Plus className="w-2.5 h-2.5" />
-                </button>
+                <button onClick={() => adjustBaseFare(10)} className="w-4 h-4 rounded glass-card text-emerald-400 font-bold flex items-center justify-center text-[10px]">+</button>
               </div>
             </div>
 
-            <div className="p-1.5 bg-slate-950/70 rounded-xl border border-white/10 flex flex-col items-center">
-              <span className="text-[9px] font-bold text-slate-400 uppercase">Per KM</span>
+            <div className="p-1 bg-slate-950/70 rounded-lg border border-white/10 flex flex-col items-center">
+              <span className="text-[8px] font-bold text-slate-400 uppercase">Per KM</span>
               <div className="flex items-center space-x-1 my-0.5">
-                <button onClick={() => adjustRatePerKm(-5)} className="w-5 h-5 rounded glass-card text-amber-400 font-bold flex items-center justify-center">
-                  <Minus className="w-2.5 h-2.5" />
-                </button>
+                <button onClick={() => adjustRatePerKm(-5)} className="w-4 h-4 rounded glass-card text-amber-400 font-bold flex items-center justify-center text-[10px]">-</button>
                 <span className="text-xs font-black font-mono text-white">{tariff.ratePerKm}</span>
-                <button onClick={() => adjustRatePerKm(5)} className="w-5 h-5 rounded glass-card text-emerald-400 font-bold flex items-center justify-center">
-                  <Plus className="w-2.5 h-2.5" />
-                </button>
+                <button onClick={() => adjustRatePerKm(5)} className="w-4 h-4 rounded glass-card text-emerald-400 font-bold flex items-center justify-center text-[10px]">+</button>
               </div>
             </div>
 
-            <div className="p-1.5 bg-slate-950/70 rounded-xl border border-white/10 flex flex-col items-center">
-              <span className="text-[9px] font-bold text-slate-400 uppercase">Wait/Min</span>
+            <div className="p-1 bg-slate-950/70 rounded-lg border border-white/10 flex flex-col items-center">
+              <span className="text-[8px] font-bold text-slate-400 uppercase">Wait/Min</span>
               <div className="flex items-center space-x-1 my-0.5">
-                <button onClick={() => adjustWaitRate(-1)} className="w-5 h-5 rounded glass-card text-amber-400 font-bold flex items-center justify-center">
-                  <Minus className="w-2.5 h-2.5" />
-                </button>
+                <button onClick={() => adjustWaitRate(-1)} className="w-4 h-4 rounded glass-card text-amber-400 font-bold flex items-center justify-center text-[10px]">-</button>
                 <span className="text-xs font-black font-mono text-white">{tariff.waitRatePerMin}</span>
-                <button onClick={() => adjustWaitRate(1)} className="w-5 h-5 rounded glass-card text-emerald-400 font-bold flex items-center justify-center">
-                  <Plus className="w-2.5 h-2.5" />
-                </button>
+                <button onClick={() => adjustWaitRate(1)} className="w-4 h-4 rounded glass-card text-emerald-400 font-bold flex items-center justify-center text-[10px]">+</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Main Fare Display Box (Hero HUD Display - OPPO F11 Optimized) */}
-      <div className="my-1 p-2.5 sm:p-3 glass-card rounded-2xl border border-cyan-500/20 bg-gradient-to-br from-slate-900/90 via-cyan-950/20 to-slate-900/90 flex flex-col justify-center items-center shadow-inner relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(#00f2fe_1px,transparent_1px)] [background-size:16px_16px] opacity-10 pointer-events-none"></div>
+      {/* 3. HERO LAYOUT: Total Fare on Left (50%), Total Time & Wait Time INLINE on Right (50%) */}
+      <div className="my-1 grid grid-cols-12 gap-1.5 items-stretch flex-1">
+        {/* Left Side (7 Cols): TOTAL FARE DISPLAY */}
+        <div className="col-span-7 p-2 glass-card rounded-xl border border-cyan-500/20 bg-gradient-to-br from-slate-900/90 via-cyan-950/20 to-slate-900/90 flex flex-col justify-center items-center relative overflow-hidden">
+          <div className="text-[8px] uppercase tracking-widest font-black text-cyan-300/80 mb-0.5 flex items-center space-x-1">
+            <Zap className="w-2.5 h-2.5 text-cyan-400 animate-pulse" />
+            <span>TOTAL FARE ({tariff.currency})</span>
+          </div>
 
-        <div className="text-[10px] uppercase tracking-widest font-extrabold text-cyan-300/80 mb-0.5 flex items-center space-x-1">
-          <Zap className="w-3 h-3 text-cyan-400 animate-pulse" />
-          <span>TOTAL FARE ({tariff.currency})</span>
-        </div>
+          <div className="flex items-baseline space-x-1">
+            <span className="text-[10px] font-black text-cyan-400/80">{tariff.currency}</span>
+            <span className="text-3xl sm:text-4xl font-black tracking-tight font-mono glow-cyan">
+              {totalFare.toLocaleString('en-US')}
+            </span>
+            <span className="text-[8px] font-bold text-slate-400">.00</span>
+          </div>
 
-        <div className="flex items-baseline space-x-1.5">
-          <span className="text-xs font-black text-cyan-400/80">{tariff.currency}</span>
-          <span className="text-4xl sm:text-5xl font-black tracking-tight font-mono glow-cyan">
-            {totalFare.toLocaleString('en-US')}
-          </span>
-          <span className="text-[10px] font-bold text-slate-400">.00</span>
-        </div>
-
-        <div className="mt-0.5 text-[9px] sm:text-[10px] text-slate-400 font-mono">
-          Base {tariff.currency} {tariff.baseFare} + {tariff.currency} {tariff.ratePerKm}/KM
-        </div>
-      </div>
-
-      {/* Grid of Key Telemetry Indicators */}
-      <div className="grid grid-cols-3 gap-1.5 my-0.5">
-        <div className="p-2 glass-card rounded-xl border border-white/5 flex flex-col items-center justify-center">
-          <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Distance</div>
-          <div className="flex items-baseline space-x-0.5 mt-0.5">
-            <span className="text-xl font-black font-mono glow-green">{distanceKm.toFixed(2)}</span>
-            <span className="text-[9px] font-bold text-emerald-400">KM</span>
+          <div className="text-[8px] text-slate-400 font-mono mt-0.5">
+            Base {tariff.currency} {tariff.baseFare} + {tariff.currency} {tariff.ratePerKm}/KM
           </div>
         </div>
 
-        <div className="p-2 glass-card rounded-xl border border-white/5 flex flex-col items-center justify-center">
-          <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Wait Time</div>
-          <div className="flex items-baseline space-x-0.5 mt-0.5">
-            <span className="text-xl font-black font-mono glow-amber">{formatTime(waitingSeconds)}</span>
+        {/* Right Side (5 Cols): TOTAL TIME & WAIT TIME INLINE STACK */}
+        <div className="col-span-5 grid grid-rows-2 gap-1">
+          {/* Total Duration */}
+          <div className="p-1.5 glass-card rounded-xl border border-white/5 flex flex-col justify-center items-center">
+            <div className="text-[8px] font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1">
+              <Clock className="w-2.5 h-2.5 text-cyan-400" />
+              <span>Total Time</span>
+            </div>
+            <div className="text-base font-black font-mono text-cyan-200 mt-0.5">
+              {formatTime(elapsedSeconds)}
+            </div>
           </div>
-        </div>
 
-        <div className="p-2 glass-card rounded-xl border border-white/5 flex flex-col items-center justify-center">
-          <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Total Time</div>
-          <div className="flex items-baseline space-x-0.5 mt-0.5">
-            <span className="text-xl font-black font-mono text-cyan-200">{formatTime(elapsedSeconds)}</span>
+          {/* Wait Time */}
+          <div className="p-1.5 glass-card rounded-xl border border-white/5 flex flex-col justify-center items-center">
+            <div className="text-[8px] font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1">
+              <Clock className="w-2.5 h-2.5 text-amber-400" />
+              <span>Wait Time</span>
+            </div>
+            <div className="text-base font-black font-mono glow-amber mt-0.5">
+              {formatTime(waitingSeconds)}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Surcharges & Extras Toggle Bar */}
-      <div className="flex items-center justify-between py-1 px-0.5 border-t border-b border-white/10 text-xs">
-        <div className="flex items-center space-x-1.5">
-          <button
-            onClick={() => onUpdateTariff(t => ({ ...t, isNightTariff: !t.isNightTariff }))}
-            className={`px-2 py-0.5 rounded-xl font-bold flex items-center space-x-1 transition-all border text-[10px] ${
-              tariff.isNightTariff ? 'bg-purple-500/30 text-purple-200 border-purple-500/50' : 'glass-pill text-slate-400 border-white/10 hover:text-white'
-            }`}
-          >
-            <Moon className="w-2.5 h-2.5" />
-            <span>Night +20%</span>
-          </button>
-
-          <button
-            onClick={() => onUpdateTariff(t => ({ ...t, isAcEnabled: !t.isAcEnabled }))}
-            className={`px-2 py-0.5 rounded-xl font-bold flex items-center space-x-1 transition-all border text-[10px] ${
-              tariff.isAcEnabled ? 'bg-cyan-500/30 text-cyan-200 border-cyan-500/50' : 'glass-pill text-slate-400 border-white/10 hover:text-white'
-            }`}
-          >
-            <Wind className="w-2.5 h-2.5" />
-            <span>AC (+50)</span>
-          </button>
-
-          <button
-            onClick={() => onUpdateTariff(t => ({ ...t, isLuggageEnabled: !t.isLuggageEnabled }))}
-            className={`px-2 py-0.5 rounded-xl font-bold flex items-center space-x-1 transition-all border text-[10px] ${
-              tariff.isLuggageEnabled ? 'bg-amber-500/30 text-amber-200 border-amber-500/50' : 'glass-pill text-slate-400 border-white/10 hover:text-white'
-            }`}
-          >
-            <Luggage className="w-2.5 h-2.5" />
-            <span>Luggage (+100)</span>
-          </button>
+      {/* 4. BOTTOM BAR: Start / Stop Button + Distance (KM) INLINE in 1 row */}
+      <div className="pt-1 flex items-center space-x-1.5 shrink-0">
+        {/* Distance Badge (Inline 35% width) */}
+        <div className="w-[38%] p-1.5 glass-card rounded-xl border border-emerald-500/30 flex items-center justify-between px-2">
+          <div className="text-[8px] uppercase font-black text-slate-400">Distance</div>
+          <div className="flex items-baseline space-x-0.5">
+            <span className="text-base font-black font-mono glow-green">{distanceKm.toFixed(2)}</span>
+            <span className="text-[8px] font-bold text-emerald-400">KM</span>
+          </div>
         </div>
-      </div>
 
-      {/* Action Controls Bar */}
-      <div className="pt-1.5 flex items-center justify-between space-x-2">
-        {status === 'IDLE' && (
-          <button
-            onClick={onStart}
-            className="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-1.5 shadow-lg shadow-emerald-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all"
-          >
-            <Play className="w-4 h-4 fill-slate-950" />
-            <span>START RIDE NAVIGATION</span>
-          </button>
-        )}
+        {/* Start / Pause / End Button (Inline 65% width) */}
+        <div className="flex-1">
+          {status === 'IDLE' && (
+            <button
+              onClick={onStart}
+              className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-1 shadow-lg shadow-emerald-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all"
+            >
+              <Play className="w-3.5 h-3.5 fill-slate-950" />
+              <span>START RIDE NAVIGATION</span>
+            </button>
+          )}
 
-        {status === 'RUNNING' && (
-          <>
-            <button
-              onClick={onPause}
-              className="flex-1 py-2.5 px-3 rounded-xl bg-amber-500 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-1.5 shadow-lg shadow-amber-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all"
-            >
-              <Pause className="w-4 h-4 fill-slate-950" />
-              <span>PAUSE</span>
-            </button>
-            <button
-              onClick={onFinish}
-              className="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-rose-500 to-red-600 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-1.5 shadow-lg shadow-red-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all"
-            >
-              <Square className="w-4 h-4 fill-white" />
-              <span>END TRIP</span>
-            </button>
-          </>
-        )}
+          {status === 'RUNNING' && (
+            <div className="flex items-center space-x-1">
+              <button
+                onClick={onPause}
+                className="flex-1 py-2 px-2 rounded-xl bg-amber-500 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-1 shadow-lg shadow-amber-500/30"
+              >
+                <Pause className="w-3.5 h-3.5 fill-slate-950" />
+                <span>PAUSE</span>
+              </button>
+              <button
+                onClick={onFinish}
+                className="flex-1 py-2 px-2 rounded-xl bg-gradient-to-r from-rose-500 to-red-600 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-1 shadow-lg shadow-red-500/30"
+              >
+                <Square className="w-3.5 h-3.5 fill-white" />
+                <span>END RIDE</span>
+              </button>
+            </div>
+          )}
 
-        {status === 'PAUSED' && (
-          <>
-            <button
-              onClick={onResume}
-              className="flex-1 py-2.5 px-3 rounded-xl bg-emerald-500 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-1.5 shadow-lg shadow-emerald-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all"
-            >
-              <Play className="w-4 h-4 fill-slate-950" />
-              <span>RESUME</span>
-            </button>
-            <button
-              onClick={onFinish}
-              className="flex-1 py-2.5 px-3 rounded-xl bg-rose-600 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-1.5 shadow-lg shadow-red-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all"
-            >
-              <Square className="w-4 h-4 fill-white" />
-              <span>END TRIP</span>
-            </button>
-          </>
-        )}
+          {status === 'PAUSED' && (
+            <div className="flex items-center space-x-1">
+              <button
+                onClick={onResume}
+                className="flex-1 py-2 px-2 rounded-xl bg-emerald-500 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-1 shadow-lg shadow-emerald-500/30"
+              >
+                <Play className="w-3.5 h-3.5 fill-slate-950" />
+                <span>RESUME</span>
+              </button>
+              <button
+                onClick={onFinish}
+                className="flex-1 py-2 px-2 rounded-xl bg-rose-600 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-1 shadow-lg shadow-red-500/30"
+              >
+                <Square className="w-3.5 h-3.5 fill-white" />
+                <span>END RIDE</span>
+              </button>
+            </div>
+          )}
 
-        {status === 'FINISHED' && (
-          <>
-            <button
-              onClick={onOpenReceiptModal}
-              className="flex-1 py-2.5 px-3 rounded-xl bg-cyan-500 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-1.5 shadow-lg shadow-cyan-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all"
-            >
-              <Receipt className="w-4 h-4" />
-              <span>VIEW RECEIPT</span>
-            </button>
-            <button
-              onClick={onReset}
-              className="py-2.5 px-3 rounded-xl glass-card text-slate-300 font-bold text-xs hover:text-white border border-white/10 transition-all flex items-center justify-center space-x-1"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>RESET</span>
-            </button>
-          </>
-        )}
+          {status === 'FINISHED' && (
+            <div className="flex items-center space-x-1">
+              <button
+                onClick={onOpenReceiptModal}
+                className="flex-1 py-2 px-2 rounded-xl bg-cyan-500 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-1 shadow-lg shadow-cyan-500/30"
+              >
+                <Receipt className="w-3.5 h-3.5" />
+                <span>RECEIPT</span>
+              </button>
+              <button
+                onClick={onReset}
+                className="py-2 px-3 rounded-xl glass-card text-slate-300 font-bold text-xs hover:text-white border border-white/10"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
