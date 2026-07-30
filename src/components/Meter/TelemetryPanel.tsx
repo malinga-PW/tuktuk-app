@@ -2,13 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { TripStatus, TariffConfig, LocationItem } from '@/hooks/useTripMeter';
-import { Play, Pause, Square, RotateCcw, Settings, Receipt, Volume2, VolumeX, Zap, Sliders, Plus, Minus, MapPin, Navigation, Target, CheckCircle2, ShieldAlert, Loader2, X, Radio, Clock } from 'lucide-react';
+import { Play, Pause, Square, RotateCcw, Settings, Receipt, Volume2, VolumeX, Zap, Sliders, Plus, Minus, MapPin, Target, CheckCircle2, ShieldAlert, Loader2, X, Radio, Clock, Gauge } from 'lucide-react';
 
 interface TelemetryPanelProps {
   status: TripStatus;
   distanceKm: number;
   elapsedSeconds: number;
   waitingSeconds: number;
+  currentSpeed: number;
   totalFare: number;
   tariff: TariffConfig;
   isAudioMuted: boolean;
@@ -45,21 +46,19 @@ export default function TelemetryPanel({
   distanceKm,
   elapsedSeconds,
   waitingSeconds,
+  currentSpeed,
   totalFare,
   tariff,
   isAudioMuted,
   isHudMirrored,
-  pickupLocation,
   destinationLocation,
   isPinpointDraggingMode,
-  avoidTolls,
   useRealGps,
   gpsError,
   searchResults,
   isSearchingPlaces,
   onSearchPlaces,
   onClearAll,
-  onToggleAvoidTolls,
   onToggleRealGps,
   onStart,
   onPause,
@@ -67,7 +66,6 @@ export default function TelemetryPanel({
   onFinish,
   onReset,
   onToggleMute,
-  onToggleMirror,
   onOpenTariffModal,
   onOpenReceiptModal,
   onUpdateTariff,
@@ -122,7 +120,7 @@ export default function TelemetryPanel({
 
   return (
     <div className={`w-full h-full flex flex-col justify-between p-2 glass-panel rounded-2xl border border-white/10 ${isHudMirrored ? 'hud-mirror' : ''}`}>
-      {/* Header Bar */}
+      {/* 1. Integrated Top Title Header Bar (Status, GPS, Reset, Rate Adjust, Settings, Audio) */}
       <div className="flex items-center justify-between pb-1 border-b border-white/10 shrink-0">
         <div className="flex items-center space-x-1.5">
           <div className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider flex items-center space-x-1 ${
@@ -177,6 +175,14 @@ export default function TelemetryPanel({
           </button>
 
           <button
+            onClick={onToggleMute}
+            title={isAudioMuted ? 'Unmute Audio & Voice Guidance' : 'Mute Audio'}
+            className="p-1 glass-card rounded-lg text-slate-300 transition-all"
+          >
+            {isAudioMuted ? <VolumeX className="w-3 h-3 text-slate-500" /> : <Volume2 className="w-3 h-3 text-cyan-400" />}
+          </button>
+
+          <button
             onClick={onOpenTariffModal}
             title="Tariff Settings"
             className="p-1 glass-card rounded-lg text-slate-300 hover:rotate-45"
@@ -193,79 +199,68 @@ export default function TelemetryPanel({
         </div>
       )}
 
-      {/* Pickup & Optional Destination INLINE Horizontal Split Row */}
-      <div className="my-1 p-1.5 glass-card rounded-xl border border-white/10 grid grid-cols-12 gap-1.5 items-center relative shrink-0">
-        {/* Pickup (Left 5 Cols) */}
-        <div className="col-span-5 flex items-center space-x-1 overflow-hidden border-r border-white/10 pr-1">
-          <Navigation className="w-3 h-3 text-emerald-400 flex-shrink-0 fill-emerald-400" />
-          <div className="overflow-hidden">
-            <div className="text-[8px] uppercase font-black text-slate-400 tracking-wider">Pickup (GPS)</div>
-            <div className="text-[10px] font-bold text-white truncate">{pickupLocation.name}</div>
-          </div>
-        </div>
-
-        {/* Optional Destination Search (Right 7 Cols) */}
-        <div className="col-span-7 flex items-center space-x-1">
-          <MapPin className="w-3 h-3 text-rose-400 flex-shrink-0 fill-rose-400" />
-          <div className="flex-1 relative">
-            <div className="flex items-center space-x-1 relative">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setIsSearchOpen(true);
-                }}
-                onFocus={() => setIsSearchOpen(true)}
-                placeholder="(Optional) Destination..."
-                className="w-full bg-slate-900/90 border border-white/15 px-1.5 py-0.5 pr-5 rounded-md text-[10px] font-bold text-white focus:outline-none focus:border-cyan-400"
-              />
-              {searchQuery && (
-                <button
-                  onClick={handleClearDestination}
-                  className="absolute right-1 text-slate-400 hover:text-white"
-                  title="Clear Destination"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              )}
-            </div>
-
-            {isSearchOpen && searchResults.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 z-50 glass-panel rounded-xl border border-cyan-500/40 max-h-36 overflow-y-auto shadow-2xl p-1 bg-slate-950">
-                {searchResults.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      onSelectDestination(item);
-                      setSearchQuery(item.name);
-                      setIsSearchOpen(false);
-                    }}
-                    className="w-full text-left p-1 hover:bg-cyan-500/20 rounded-md flex items-center justify-between text-[10px] transition-colors border-b border-white/5 last:border-0"
-                  >
-                    <div className="overflow-hidden mr-1">
-                      <div className="font-bold text-white truncate text-[10px]">{item.name}</div>
-                      <div className="text-[8px] text-slate-400 font-mono truncate">{item.address}</div>
-                    </div>
-                    <CheckCircle2 className="w-3 h-3 text-cyan-400 flex-shrink-0" />
-                  </button>
-                ))}
-              </div>
+      {/* 2. Destination Search & Drag Pin Row (Pickup row removed for maximum space) */}
+      <div className="my-1 p-1.5 glass-card rounded-xl border border-white/10 flex items-center space-x-1.5 relative shrink-0">
+        <MapPin className="w-3.5 h-3.5 text-rose-400 flex-shrink-0 fill-rose-400" />
+        <div className="flex-1 relative">
+          <div className="flex items-center space-x-1 relative">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setIsSearchOpen(true);
+              }}
+              onFocus={() => setIsSearchOpen(true)}
+              placeholder="(Optional) Search destination or tap start..."
+              className="w-full bg-slate-900/90 border border-white/15 px-2 py-1 pr-6 rounded-md text-xs font-bold text-white focus:outline-none focus:border-cyan-400"
+            />
+            {searchQuery && (
+              <button
+                onClick={handleClearDestination}
+                className="absolute right-1.5 text-slate-400 hover:text-white"
+                title="Clear Destination"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             )}
           </div>
 
-          <button
-            onClick={onTogglePinpointMode}
-            className={`px-1.5 py-0.5 rounded text-[8px] font-black transition-all border shrink-0 ${
-              isPinpointDraggingMode
-                ? 'bg-rose-500 text-white border-rose-400 animate-pulse'
-                : 'glass-pill text-cyan-300 border-cyan-500/30'
-            }`}
-            title="Drag Map Center"
-          >
-            {isPinpointDraggingMode ? 'PINNING' : 'DRAG PIN'}
-          </button>
+          {isSearchOpen && searchResults.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-1 z-50 glass-panel rounded-xl border border-cyan-500/40 max-h-36 overflow-y-auto shadow-2xl p-1 bg-slate-950">
+              {searchResults.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    onSelectDestination(item);
+                    setSearchQuery(item.name);
+                    setIsSearchOpen(false);
+                  }}
+                  className="w-full text-left p-1 hover:bg-cyan-500/20 rounded-md flex items-center justify-between text-[10px] transition-colors border-b border-white/5 last:border-0"
+                >
+                  <div className="overflow-hidden mr-1">
+                    <div className="font-bold text-white truncate text-[10px]">{item.name}</div>
+                    <div className="text-[8px] text-slate-400 font-mono truncate">{item.address}</div>
+                  </div>
+                  <CheckCircle2 className="w-3 h-3 text-cyan-400 flex-shrink-0" />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
+
+        <button
+          onClick={onTogglePinpointMode}
+          className={`px-2 py-1 rounded text-[9px] font-black transition-all border shrink-0 flex items-center space-x-1 ${
+            isPinpointDraggingMode
+              ? 'bg-rose-500 text-white border-rose-400 animate-pulse'
+              : 'glass-pill text-cyan-300 border-cyan-500/30'
+          }`}
+          title="Drag Map Center"
+        >
+          <Target className="w-3 h-3" />
+          <span>{isPinpointDraggingMode ? 'PINNING' : 'DRAG PIN'}</span>
+        </button>
       </div>
 
       {/* Rate Control Drawer */}
@@ -302,27 +297,34 @@ export default function TelemetryPanel({
         </div>
       )}
 
-      {/* Hero Layout: Total Fare on Left, Total Time & Wait Time INLINE on Right */}
+      {/* 3. HERO LAYOUT: Total Fare + Distance (KM) on Left (60%), Total Time & Wait Time on Right (40%) */}
       <div className="my-1 grid grid-cols-12 gap-1.5 items-stretch flex-1">
-        <div className="col-span-7 p-2 glass-card rounded-xl border border-cyan-500/20 bg-gradient-to-br from-slate-900/90 via-cyan-950/20 to-slate-900/90 flex flex-col justify-center items-center relative overflow-hidden">
+        {/* Left Hero Box (7 Cols): TOTAL FARE + DISTANCE KM INTEGRATED */}
+        <div className="col-span-7 p-2 glass-card rounded-xl border border-cyan-500/20 bg-gradient-to-br from-slate-900/90 via-cyan-950/20 to-slate-900/90 flex flex-col justify-between items-center relative overflow-hidden">
           <div className="text-[8px] uppercase tracking-widest font-black text-cyan-300/80 mb-0.5 flex items-center space-x-1">
             <Zap className="w-2.5 h-2.5 text-cyan-400 animate-pulse" />
             <span>TOTAL FARE ({tariff.currency})</span>
           </div>
 
-          <div className="flex items-baseline space-x-1">
-            <span className="text-[10px] font-black text-cyan-400/80">{tariff.currency}</span>
-            <span className="text-3xl sm:text-4xl font-black tracking-tight font-mono glow-cyan">
+          <div className="flex items-baseline space-x-1 my-auto">
+            <span className="text-xs font-black text-cyan-400/80">{tariff.currency}</span>
+            <span className="text-4xl sm:text-5xl font-black tracking-tight font-mono glow-cyan">
               {totalFare.toLocaleString('en-US')}
             </span>
-            <span className="text-[8px] font-bold text-slate-400">.00</span>
+            <span className="text-[9px] font-bold text-slate-400">.00</span>
           </div>
 
-          <div className="text-[8px] text-slate-400 font-mono mt-0.5">
-            Base {tariff.currency} {tariff.baseFare} + {tariff.currency} {tariff.ratePerKm}/KM
+          {/* Integrated Distance Badge inside Top Hero Box */}
+          <div className="w-full pt-1 border-t border-white/10 flex items-center justify-between px-2">
+            <span className="text-[8px] uppercase font-black text-slate-400">Distance</span>
+            <div className="flex items-baseline space-x-1">
+              <span className="text-lg font-black font-mono glow-green">{distanceKm.toFixed(2)}</span>
+              <span className="text-[9px] font-bold text-emerald-400">KM</span>
+            </div>
           </div>
         </div>
 
+        {/* Right Stack (5 Cols): TOTAL TIME & WAIT TIME */}
         <div className="col-span-5 grid grid-rows-2 gap-1">
           <div className="p-1.5 glass-card rounded-xl border border-white/5 flex flex-col justify-center items-center">
             <div className="text-[8px] font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1">
@@ -346,23 +348,28 @@ export default function TelemetryPanel({
         </div>
       </div>
 
-      {/* Bottom Bar: Direct Road Pickup Button + Distance (KM) INLINE */}
+      {/* 4. BOTTOM ACTION SECTION: Speed Badge (where Distance used to be) + Big Driving Action Button */}
       <div className="pt-1 flex items-center space-x-1.5 shrink-0">
-        <div className="w-[38%] p-1.5 glass-card rounded-xl border border-emerald-500/30 flex items-center justify-between px-2">
-          <div className="text-[8px] uppercase font-black text-slate-400">Distance</div>
+        {/* Live Speed Gauge Badge (where Distance used to be) */}
+        <div className="w-[35%] p-2 glass-card rounded-xl border border-cyan-500/30 flex items-center justify-between px-2">
+          <div className="flex items-center space-x-1 text-slate-400">
+            <Gauge className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="text-[8px] uppercase font-black">Speed</span>
+          </div>
           <div className="flex items-baseline space-x-0.5">
-            <span className="text-base font-black font-mono glow-green">{distanceKm.toFixed(2)}</span>
-            <span className="text-[8px] font-bold text-emerald-400">KM</span>
+            <span className="text-lg font-black font-mono text-cyan-300">{currentSpeed}</span>
+            <span className="text-[8px] font-bold text-cyan-400">KM/H</span>
           </div>
         </div>
 
+        {/* Big Driving Action Button (Increased height for driving touch targets) */}
         <div className="flex-1">
           {status === 'IDLE' && (
             <button
               onClick={onStart}
-              className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-1 shadow-lg shadow-emerald-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all"
+              className="w-full py-3 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-1.5 shadow-xl shadow-emerald-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all"
             >
-              <Play className="w-3.5 h-3.5 fill-slate-950" />
+              <Play className="w-4 h-4 fill-slate-950" />
               <span>{destinationLocation ? 'START RIDE NAVIGATION' : 'START ROAD PICKUP METER'}</span>
             </button>
           )}
@@ -371,16 +378,16 @@ export default function TelemetryPanel({
             <div className="flex items-center space-x-1">
               <button
                 onClick={onPause}
-                className="flex-1 py-2 px-2 rounded-xl bg-amber-500 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-1 shadow-lg shadow-amber-500/30"
+                className="flex-1 py-3 px-2 rounded-xl bg-amber-500 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-1 shadow-xl shadow-amber-500/30"
               >
-                <Pause className="w-3.5 h-3.5 fill-slate-950" />
+                <Pause className="w-4 h-4 fill-slate-950" />
                 <span>PAUSE</span>
               </button>
               <button
                 onClick={onFinish}
-                className="flex-1 py-2 px-2 rounded-xl bg-gradient-to-r from-rose-500 to-red-600 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-1 shadow-lg shadow-red-500/30"
+                className="flex-1 py-3 px-2 rounded-xl bg-gradient-to-r from-rose-500 to-red-600 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-1 shadow-xl shadow-red-500/30"
               >
-                <Square className="w-3.5 h-3.5 fill-white" />
+                <Square className="w-4 h-4 fill-white" />
                 <span>END RIDE</span>
               </button>
             </div>
@@ -390,16 +397,16 @@ export default function TelemetryPanel({
             <div className="flex items-center space-x-1">
               <button
                 onClick={onResume}
-                className="flex-1 py-2 px-2 rounded-xl bg-emerald-500 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-1 shadow-lg shadow-emerald-500/30"
+                className="flex-1 py-3 px-2 rounded-xl bg-emerald-500 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-1 shadow-xl shadow-emerald-500/30"
               >
-                <Play className="w-3.5 h-3.5 fill-slate-950" />
+                <Play className="w-4 h-4 fill-slate-950" />
                 <span>RESUME</span>
               </button>
               <button
                 onClick={onFinish}
-                className="flex-1 py-2 px-2 rounded-xl bg-rose-600 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-1 shadow-lg shadow-red-500/30"
+                className="flex-1 py-3 px-2 rounded-xl bg-rose-600 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-1 shadow-xl shadow-red-500/30"
               >
-                <Square className="w-3.5 h-3.5 fill-white" />
+                <Square className="w-4 h-4 fill-white" />
                 <span>END RIDE</span>
               </button>
             </div>
@@ -409,16 +416,16 @@ export default function TelemetryPanel({
             <div className="flex items-center space-x-1">
               <button
                 onClick={onOpenReceiptModal}
-                className="flex-1 py-2 px-2 rounded-xl bg-cyan-500 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-1 shadow-lg shadow-cyan-500/30"
+                className="flex-1 py-3 px-2 rounded-xl bg-cyan-500 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-1 shadow-xl shadow-cyan-500/30"
               >
-                <Receipt className="w-3.5 h-3.5" />
+                <Receipt className="w-4 h-4" />
                 <span>RECEIPT</span>
               </button>
               <button
                 onClick={onReset}
-                className="py-2 px-3 rounded-xl glass-card text-slate-300 font-bold text-xs hover:text-white border border-white/10"
+                className="py-3 px-3 rounded-xl glass-card text-slate-300 font-bold text-xs hover:text-white border border-white/10"
               >
-                <RotateCcw className="w-3.5 h-3.5" />
+                <RotateCcw className="w-4 h-4" />
               </button>
             </div>
           )}

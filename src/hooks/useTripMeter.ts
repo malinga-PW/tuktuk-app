@@ -66,6 +66,7 @@ export function useTripMeter() {
   const [gpsError, setGpsError] = useState<string | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const wakeLockRef = useRef<unknown | null>(null);
+  const lastAnnouncedKmRef = useRef<number>(0);
 
   // Locations state
   const [pickupLocation, setPickupLocation] = useState<LocationItem>(INITIAL_REAL_GPS_PICKUP);
@@ -224,7 +225,16 @@ export function useTripMeter() {
             if (lastPt) {
               const deltaKm = getHaversineDistance(lastPt.lat, lastPt.lng, latitude, longitude);
               if (deltaKm > 0.005) {
-                setDistanceKm((d) => d + deltaKm);
+                setDistanceKm((d) => {
+                  const newDist = d + deltaKm;
+                  // Voice announcement per 1.0 km
+                  const currentKmFloor = Math.floor(newDist);
+                  if (currentKmFloor > lastAnnouncedKmRef.current && currentKmFloor >= 1) {
+                    lastAnnouncedKmRef.current = currentKmFloor;
+                    meterAudio.speak(`${currentKmFloor} kilometer completed.`);
+                  }
+                  return newDist;
+                });
                 meterAudio.playTick();
               }
             }
@@ -314,22 +324,28 @@ export function useTripMeter() {
   const startTrip = () => {
     requestWakeLock();
     setStatus('RUNNING');
+    lastAnnouncedKmRef.current = 0;
     meterAudio.playStartChime();
+    meterAudio.speak("Ride started. Drive safely.");
   };
 
   const pauseTrip = () => {
     setStatus('PAUSED');
     setCurrentSpeed(0);
+    meterAudio.speak("Meter paused.");
   };
 
   const resumeTrip = () => {
     setStatus('RUNNING');
+    meterAudio.speak("Meter resumed.");
   };
 
   const finishTrip = () => {
     setStatus('FINISHED');
     setCurrentSpeed(0);
     meterAudio.playStopChime();
+    const finalFare = calculateFare();
+    meterAudio.speak(`Trip completed. Total fare ${tariff.currency} ${finalFare}`);
   };
 
   const resetTrip = () => {
@@ -339,6 +355,7 @@ export function useTripMeter() {
     setWaitingSeconds(0);
     setCurrentSpeed(0);
     setRouteIndex(0);
+    lastAnnouncedKmRef.current = 0;
     setRoutePath([pickupLocation]);
   };
 
@@ -353,6 +370,7 @@ export function useTripMeter() {
       { lat: pickupLocation.lat, lng: pickupLocation.lng },
     ]);
     setRouteIndex(0);
+    lastAnnouncedKmRef.current = 0;
     setRoutePath([pickupLocation]);
     setIsPinpointDraggingMode(false);
     setSearchResults([]);
@@ -368,48 +386,60 @@ export function useTripMeter() {
     };
     setDestinationLocation(customPin);
     setIsPinpointDraggingMode(false);
+    meterAudio.speak("Destination pinned.");
   };
 
-  // Main Simulation Loop
+  // Main Continuous Timer Loop for Total Time and Wait Time
   useEffect(() => {
-    if (status !== 'RUNNING' || useRealGps) {
+    if (status !== 'RUNNING' && status !== 'PAUSED') {
       if (timerRef.current) clearInterval(timerRef.current);
       return;
     }
 
     timerRef.current = setInterval(() => {
+      // 1. Always increment elapsed total time while RUNNING or PAUSED
       setElapsedSeconds((prev) => prev + 1);
 
-      if (isSimulatingTraffic) {
-        setCurrentSpeed(0);
+      // 2. Increment waiting time if PAUSED or speed is zero/simulating traffic
+      if (status === 'PAUSED' || currentSpeed === 0 || isSimulatingTraffic) {
         setWaitingSeconds((prev) => prev + 1);
-      } else {
-        const simSpeed = Math.floor(25 + Math.random() * 20);
-        setCurrentSpeed(simSpeed);
+      }
 
-        const addKm = simSpeed / 3600;
-        setDistanceKm((prev) => {
-          const nextVal = prev + addKm;
-          if (Math.floor(nextVal * 10) > Math.floor(prev * 10)) {
-            meterAudio.playTick();
-          }
-          return nextVal;
-        });
+      // 3. Simulation mode movement (when real GPS is OFF)
+      if (status === 'RUNNING' && !useRealGps) {
+        if (!isSimulatingTraffic) {
+          const simSpeed = Math.floor(25 + Math.random() * 20);
+          setCurrentSpeed(simSpeed);
 
-        if (destinationLocation && fullNavPath.length > 1) {
-          setRouteIndex((prevIdx) => {
-            const nextIdx = prevIdx + 1;
-            if (nextIdx >= fullNavPath.length) {
-              setStatus('FINISHED');
-              setCurrentSpeed(0);
-              meterAudio.playStopChime();
-              return prevIdx;
+          const addKm = simSpeed / 3600;
+          setDistanceKm((prev) => {
+            const nextVal = prev + addKm;
+            const currentKmFloor = Math.floor(nextVal);
+            if (currentKmFloor > lastAnnouncedKmRef.current && currentKmFloor >= 1) {
+              lastAnnouncedKmRef.current = currentKmFloor;
+              meterAudio.speak(`${currentKmFloor} kilometer completed.`);
             }
-
-            const newPoint = fullNavPath[nextIdx];
-            setRoutePath((prevPath) => [...prevPath, newPoint]);
-            return nextIdx;
+            if (Math.floor(nextVal * 10) > Math.floor(prev * 10)) {
+              meterAudio.playTick();
+            }
+            return nextVal;
           });
+
+          if (destinationLocation && fullNavPath.length > 1) {
+            setRouteIndex((prevIdx) => {
+              const nextIdx = prevIdx + 1;
+              if (nextIdx >= fullNavPath.length) {
+                setStatus('FINISHED');
+                setCurrentSpeed(0);
+                meterAudio.playStopChime();
+                meterAudio.speak("Arrived at destination.");
+                return prevIdx;
+              }
+              const newPoint = fullNavPath[nextIdx];
+              setRoutePath((prevPath) => [...prevPath, newPoint]);
+              return nextIdx;
+            });
+          }
         }
       }
     }, 1000);
@@ -417,7 +447,7 @@ export function useTripMeter() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [status, isSimulatingTraffic, fullNavPath, useRealGps, destinationLocation]);
+  }, [status, isSimulatingTraffic, fullNavPath, useRealGps, destinationLocation, currentSpeed]);
 
   const currentPosition = routePath[routePath.length - 1] || pickupLocation;
 

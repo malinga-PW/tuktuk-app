@@ -1,9 +1,70 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import 'leaflet/dist/leaflet.css';
+import React, { useEffect, useState, useRef } from 'react';
+import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
+import L from 'leaflet';
 import { RoutePoint, LocationItem } from '@/hooks/useTripMeter';
-import { Navigation, AlertTriangle, Gauge, ShieldAlert, Activity, Target, MapPin, Check } from 'lucide-react';
+import { Navigation, Layers, ShieldAlert, AlertTriangle, Crosshair, MapPin, Eye } from 'lucide-react';
+import { meterAudio } from '@/utils/audio';
+
+// Custom TukTuk Vehicle Icon
+const tuktukIcon = L.divIcon({
+  className: 'tuktuk-marker-icon',
+  html: `
+    <div class="relative flex items-center justify-center">
+      <div class="tuktuk-pulse"></div>
+      <div class="w-10 h-10 rounded-full bg-slate-900 border-2 border-cyan-400 shadow-xl flex items-center justify-center text-xl z-10">
+        🛺
+      </div>
+    </div>
+  `,
+  iconSize: [44, 44],
+  iconAnchor: [22, 22],
+});
+
+// Destination Pin Icon
+const destIcon = L.divIcon({
+  className: 'dest-marker-icon',
+  html: `
+    <div class="relative flex items-center justify-center">
+      <div class="w-9 h-9 rounded-full bg-rose-600 border-2 border-white shadow-2xl flex items-center justify-center text-white z-10 animate-bounce">
+        📍
+      </div>
+    </div>
+  `,
+  iconSize: [36, 36],
+  iconAnchor: [18, 36],
+});
+
+interface MapControllerProps {
+  center: [number, number];
+  zoomLevel?: number;
+}
+
+function MapController({ center, zoomLevel }: MapControllerProps) {
+  const map = useMap();
+  useEffect(() => {
+    map.flyTo(center, zoomLevel || map.getZoom(), { duration: 1.2 });
+  }, [center, zoomLevel, map]);
+  return null;
+}
+
+// Drag Pin Center Detector
+function MapCenterListener({ onCenterChange, isPinpointMode }: { onCenterChange: (coords: { lat: number, lng: number }) => void, isPinpointMode: boolean }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!isPinpointMode) return;
+    const handleMove = () => {
+      const center = map.getCenter();
+      onCenterChange({ lat: center.lat, lng: center.lng });
+    };
+    map.on('move', handleMove);
+    return () => {
+      map.off('move', handleMove);
+    };
+  }, [map, isPinpointMode, onCenterChange]);
+  return null;
+}
 
 interface InteractiveMapProps {
   currentPosition: RoutePoint;
@@ -32,391 +93,186 @@ export default function InteractiveMap({
   tileStyle,
   isSimulatingTraffic,
   showTrafficOverlay,
-  pickupLocation,
   destinationLocation,
   isPinpointDraggingMode,
-  avoidTolls,
   onTileStyleChange,
   onToggleTraffic,
   onToggleTrafficOverlay,
   onMapCenterChange,
   onConfirmPinpoint,
 }: InteractiveMapProps) {
-  const [mapLoaded, setMapLoaded] = useState(false);
-  const [LInstance, setLInstance] = useState<typeof import('leaflet') | null>(null);
-  const [mapInstance, setMapInstance] = useState<import('leaflet').Map | null>(null);
-  const [markerInstance, setMarkerInstance] = useState<import('leaflet').Marker | null>(null);
-  const [destMarkerInstance, setDestMarkerInstance] = useState<import('leaflet').Marker | null>(null);
-  const [pickupMarkerInstance, setPickupMarkerInstance] = useState<import('leaflet').Marker | null>(null);
-  const [polylineGroup, setPolylineGroup] = useState<import('leaflet').FeatureGroup | null>(null);
-  const [trafficGroup, setTrafficGroup] = useState<import('leaflet').FeatureGroup | null>(null);
+  const [targetZoom, setTargetZoom] = useState<number>(15);
+  const [showStyleMenu, setShowStyleMenu] = useState<boolean>(false);
+  const [showLegend, setShowLegend] = useState<boolean>(false);
 
-  // Initialize Leaflet on Client Side
-  useEffect(() => {
-    import('leaflet').then((L) => {
-      setLInstance(L);
-      delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl;
-      L.Icon.Default.mergeOptions({
-        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-      });
-      setMapLoaded(true);
-    });
-  }, []);
-
-  // Map Initialization
-  useEffect(() => {
-    if (!mapLoaded || !LInstance) return;
-
-    const container = document.getElementById('leaflet-map-container');
-    if (!container || (container as unknown as { _leaflet_id?: string })._leaflet_id) return;
-
-    const initialMap = LInstance.map('leaflet-map-container', {
-      center: [currentPosition.lat, currentPosition.lng],
-      zoom: 15,
-      zoomControl: false,
-      attributionControl: false,
-    });
-
-    const pGroup = LInstance.featureGroup().addTo(initialMap);
-    const tGroup = LInstance.featureGroup().addTo(initialMap);
-
-    setPolylineGroup(pGroup);
-    setTrafficGroup(tGroup);
-    setMapInstance(initialMap);
-
-    initialMap.on('move', () => {
-      const center = initialMap.getCenter();
-      onMapCenterChange({ lat: center.lat, lng: center.lng });
-    });
-
-    return () => {
-      initialMap.remove();
-    };
-  }, [mapLoaded, LInstance]);
-
-  // Tile Layer Updates
-  useEffect(() => {
-    if (!mapInstance || !LInstance) return;
-
-    mapInstance.eachLayer((layer) => {
-      if (layer instanceof LInstance.TileLayer) {
-        mapInstance.removeLayer(layer);
-      }
-    });
-
-    let tileUrl = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-    if (tileStyle === 'dark') {
-      tileUrl = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
-    } else if (tileStyle === 'satellite') {
-      tileUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-    }
-
-    LInstance.tileLayer(tileUrl, {
-      maxZoom: 19,
-      subdomains: 'abcd',
-    }).addTo(mapInstance);
-  }, [mapInstance, LInstance, tileStyle]);
-
-  // Render Traffic Condition Colors along fullNavPath
-  useEffect(() => {
-    if (!mapInstance || !LInstance || !trafficGroup || !fullNavPath) return;
-
-    trafficGroup.clearLayers();
-    if (!showTrafficOverlay) return;
-
-    for (let i = 0; i < fullNavPath.length - 1; i++) {
-      const p1 = fullNavPath[i];
-      const p2 = fullNavPath[i + 1];
-
-      let strokeColor = '#00e676';
-      if (p1.trafficStatus === 'moderate') strokeColor = '#ffb300';
-      if (p1.trafficStatus === 'heavy') strokeColor = '#ff1744';
-
-      const trafficSegment = LInstance.polyline([[p1.lat, p1.lng], [p2.lat, p2.lng]], {
-        color: strokeColor,
-        weight: 9,
-        opacity: 0.65,
-        lineCap: 'round',
-      });
-
-      trafficSegment.addTo(trafficGroup);
-    }
-  }, [mapInstance, LInstance, trafficGroup, showTrafficOverlay, fullNavPath]);
-
-  // Pickup & Destination Pins Rendering
-  useEffect(() => {
-    if (!mapInstance || !LInstance) return;
-
-    // Pickup Pin
-    const pickupHtml = `
-      <div class="relative flex items-center justify-center">
-        <div class="w-8 h-8 rounded-full bg-emerald-600 border-2 border-white shadow-xl flex items-center justify-center text-white font-bold text-xs">
-          📍
-        </div>
-      </div>
-    `;
-    const pickupIcon = LInstance.divIcon({
-      html: pickupHtml,
-      className: 'pickup-marker-icon',
-      iconSize: [36, 36],
-      iconAnchor: [18, 18],
-    });
-
-    if (!pickupMarkerInstance) {
-      const newPickup = LInstance.marker([pickupLocation.lat, pickupLocation.lng], { icon: pickupIcon }).addTo(mapInstance);
-      newPickup.bindPopup(`<b>${pickupLocation.name}</b><br/>Pickup Location`);
-      setPickupMarkerInstance(newPickup);
-    } else {
-      pickupMarkerInstance.setLatLng([pickupLocation.lat, pickupLocation.lng]);
-    }
-
-    // Destination Pin
-    if (destinationLocation) {
-      const destHtml = `
-        <div class="relative flex items-center justify-center">
-          <div class="w-9 h-9 rounded-full bg-rose-600 border-2 border-white shadow-xl flex items-center justify-center text-white font-bold text-xs animate-bounce">
-            🚩
-          </div>
-        </div>
-      `;
-
-      const destIcon = LInstance.divIcon({
-        html: destHtml,
-        className: 'dest-marker-icon',
-        iconSize: [36, 36],
-        iconAnchor: [18, 18],
-      });
-
-      if (!destMarkerInstance) {
-        const newDest = LInstance.marker([destinationLocation.lat, destinationLocation.lng], { icon: destIcon }).addTo(mapInstance);
-        newDest.bindPopup(`<b>${destinationLocation.name}</b><br/>Destination Location`);
-        setDestMarkerInstance(newDest);
-      } else {
-        destMarkerInstance.setLatLng([destinationLocation.lat, destinationLocation.lng]);
-        destMarkerInstance.setPopupContent(`<b>${destinationLocation.name}</b><br/>Destination Location`);
-      }
-
-      if (!isPinpointDraggingMode) {
-        const bounds = LInstance.latLngBounds(
-          [pickupLocation.lat, pickupLocation.lng],
-          [destinationLocation.lat, destinationLocation.lng]
-        );
-        mapInstance.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
-      }
-    }
-  }, [mapInstance, LInstance, pickupLocation, destinationLocation, isPinpointDraggingMode]);
-
-  // Vehicle Marker & Navigation Polyline Updates
-  useEffect(() => {
-    if (!mapInstance || !LInstance || !polylineGroup) return;
-
-    const tuktukHtml = `
-      <div class="relative flex items-center justify-center">
-        <div class="tuktuk-pulse"></div>
-        <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 border-2 border-cyan-200 shadow-xl flex items-center justify-center text-white font-bold text-xs transform hover:scale-110 transition-transform">
-          🛺
-        </div>
-      </div>
-    `;
-
-    const customIcon = LInstance.divIcon({
-      html: tuktukHtml,
-      className: 'tuktuk-marker-icon',
-      iconSize: [44, 44],
-      iconAnchor: [22, 22],
-    });
-
-    if (!markerInstance) {
-      const newMarker = LInstance.marker([currentPosition.lat, currentPosition.lng], { icon: customIcon }).addTo(mapInstance);
-      setMarkerInstance(newMarker);
-    } else {
-      markerInstance.setLatLng([currentPosition.lat, currentPosition.lng]);
-    }
-
-    // Render Full Planned Navigation Line (Upcoming Route in Cyan dashed)
-    polylineGroup.clearLayers();
-    if (fullNavPath && fullNavPath.length > 1) {
-      const fullLatLngs = fullNavPath.map(pt => [pt.lat, pt.lng] as [number, number]);
-      const navPolyline = LInstance.polyline(fullLatLngs, {
-        color: '#00f2fe',
-        weight: 6,
-        opacity: 0.5,
-        dashArray: '8, 8',
-      });
-      navPolyline.addTo(polylineGroup);
-    }
-
-    // Render Traveled Active Route (Solid Green)
-    const activeLatLngs = routePath.map((pt) => [pt.lat, pt.lng] as [number, number]);
-    if (activeLatLngs.length > 1) {
-      const activePath = LInstance.polyline(activeLatLngs, {
-        color: '#00e676',
-        weight: 6,
-        opacity: 0.95,
-        lineCap: 'round',
-      });
-      activePath.addTo(polylineGroup);
-    }
-
-    if (!isPinpointDraggingMode) {
-      mapInstance.panTo([currentPosition.lat, currentPosition.lng], { animate: true, duration: 0.5 });
-    }
-
-  }, [mapInstance, LInstance, polylineGroup, currentPosition, routePath, fullNavPath, isPinpointDraggingMode]);
-
-  const handleRecenter = () => {
-    if (mapInstance) {
-      mapInstance.setView([currentPosition.lat, currentPosition.lng], 16, { animate: true });
+  const getTileUrl = () => {
+    switch (tileStyle) {
+      case 'dark':
+        return 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+      case 'satellite':
+        return 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+      case 'streets':
+      default:
+        return 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
     }
   };
 
+  const navPolylineCoords: [number, number][] = fullNavPath.map((p) => [p.lat, p.lng]);
+  const drivenPolylineCoords: [number, number][] = routePath.map((p) => [p.lat, p.lng]);
+
+  const handleCenterAndZoomIn = () => {
+    setTargetZoom(18); // Zoom Level 18 (Level +3 close up driving view)
+    meterAudio.speak("Map centered close-up.");
+  };
+
   return (
-    <div className="relative w-full h-full min-h-[300px] overflow-hidden rounded-2xl border border-white/10 bg-slate-950 shadow-2xl">
-      {/* Leaflet Map DOM Container */}
-      <div id="leaflet-map-container" className="w-full h-full z-0" />
+    <div className="w-full h-full relative overflow-hidden bg-slate-950">
+      {/* Edge-to-edge 1:1 Leaflet Map */}
+      <MapContainer
+        center={[currentPosition.lat, currentPosition.lng]}
+        zoom={targetZoom}
+        zoomControl={false}
+        className="w-full h-full z-0"
+      >
+        <MapController center={[currentPosition.lat, currentPosition.lng]} zoomLevel={targetZoom} />
+        <MapCenterListener onCenterChange={onMapCenterChange} isPinpointMode={isPinpointDraggingMode} />
 
-      {/* Target Crosshair overlay when Drag Pinpoint Mode is ACTIVE */}
-      {isPinpointDraggingMode && (
-        <div className="absolute inset-0 z-20 pointer-events-none flex items-center justify-center">
-          <div className="relative flex items-center justify-center">
-            <div className="w-20 h-20 rounded-full border-2 border-rose-500/60 animate-ping absolute"></div>
-            <div className="w-12 h-12 rounded-full border-2 border-rose-500 bg-rose-500/20 flex items-center justify-center text-rose-400 font-bold shadow-2xl">
-              <Target className="w-8 h-8 animate-pulse text-rose-500" />
+        <TileLayer
+          attribution='&copy; OpenStreetMap'
+          url={getTileUrl()}
+        />
+
+        {/* 100% OSRM Real Road Route Line */}
+        {navPolylineCoords.length > 1 && (
+          <Polyline
+            positions={navPolylineCoords}
+            pathOptions={{
+              color: '#00f2fe',
+              weight: 5,
+              opacity: 0.85,
+              dashArray: '8, 8',
+            }}
+          />
+        )}
+
+        {/* Driven Polyline Path */}
+        {drivenPolylineCoords.length > 1 && (
+          <Polyline
+            positions={drivenPolylineCoords}
+            pathOptions={{
+              color: '#39ff14',
+              weight: 6,
+              opacity: 0.95,
+            }}
+          />
+        )}
+
+        {/* TukTuk Vehicle Marker */}
+        <Marker position={[currentPosition.lat, currentPosition.lng]} icon={tuktukIcon}>
+          <Popup>
+            <div className="text-xs font-mono font-bold text-slate-900">
+              🛺 TukTuk Live Location<br />
+              Speed: {currentSpeed} KM/H
             </div>
-            <div className="w-2.5 h-2.5 rounded-full bg-rose-500 absolute"></div>
+          </Popup>
+        </Marker>
+
+        {/* Destination Location Marker */}
+        {destinationLocation && (
+          <Marker position={[destinationLocation.lat, destinationLocation.lng]} icon={destIcon}>
+            <Popup>
+              <div className="text-xs font-mono font-bold text-slate-900">
+                📍 {destinationLocation.name}
+              </div>
+            </Popup>
+          </Marker>
+        )}
+      </MapContainer>
+
+      {/* Floating Map Controls Bar (Collapsible Sleek Icon Menu) */}
+      <div className="absolute top-2 left-2 z-20 flex items-center space-x-1.5">
+        <button
+          onClick={() => setShowStyleMenu(!showStyleMenu)}
+          className="p-1.5 glass-panel rounded-xl text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/20 shadow-xl flex items-center space-x-1 text-xs font-bold"
+          title="Map Layer Styles"
+        >
+          <Layers className="w-4 h-4 text-cyan-400" />
+        </button>
+
+        {showStyleMenu && (
+          <div className="flex items-center space-x-1 glass-panel p-1 rounded-xl border border-cyan-500/30 animate-fadeIn">
+            <button
+              onClick={() => onTileStyleChange('streets')}
+              className={`px-2 py-1 rounded-lg text-[10px] font-extrabold ${tileStyle === 'streets' ? 'bg-cyan-500 text-slate-950' : 'text-slate-300'}`}
+            >
+              Google
+            </button>
+            <button
+              onClick={() => onTileStyleChange('dark')}
+              className={`px-2 py-1 rounded-lg text-[10px] font-extrabold ${tileStyle === 'dark' ? 'bg-cyan-500 text-slate-950' : 'text-slate-300'}`}
+            >
+              Dark
+            </button>
+            <button
+              onClick={() => onTileStyleChange('satellite')}
+              className={`px-2 py-1 rounded-lg text-[10px] font-extrabold ${tileStyle === 'satellite' ? 'bg-cyan-500 text-slate-950' : 'text-slate-300'}`}
+            >
+              Satellite
+            </button>
           </div>
-        </div>
-      )}
-
-      {/* Top Banner when Drag Pinpoint Mode is ACTIVE */}
-      {isPinpointDraggingMode && (
-        <div className="absolute top-16 left-1/2 transform -translate-x-1/2 z-30 flex items-center space-x-2">
-          <button
-            onClick={onConfirmPinpoint}
-            className="px-5 py-2.5 rounded-2xl bg-rose-600 text-white font-black text-xs uppercase tracking-wider flex items-center space-x-2 shadow-2xl hover:bg-rose-500 transition-all border border-rose-300 animate-bounce"
-          >
-            <Check className="w-4 h-4" />
-            <span>CONFIRM DESTINATION AT CENTER</span>
-          </button>
-        </div>
-      )}
-
-      {/* Top Left - Speedometer HUD Overlay */}
-      <div className="absolute top-4 left-4 z-10 flex items-center space-x-3 glass-panel px-4 py-2.5 rounded-2xl shadow-xl">
-        <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
-          <Gauge className="w-5 h-5 animate-pulse" />
-        </div>
-        <div>
-          <div className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Live Speed</div>
-          <div className="flex items-baseline space-x-1">
-            <span className="text-2xl font-black tracking-tight glow-cyan">{currentSpeed}</span>
-            <span className="text-xs font-bold text-cyan-300">KM/H</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Top Center - Current Street & Avoid Tolls Badge */}
-      <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 glass-panel px-4 py-2 rounded-2xl shadow-xl flex items-center space-x-2 border border-white/15">
-        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-        <span className="text-xs font-bold font-mono text-cyan-200">
-          {currentPosition.streetName || "Colombo Navigation Route"}
-        </span>
-        {avoidTolls && (
-          <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-black uppercase flex items-center space-x-1">
-            <ShieldAlert className="w-3 h-3 text-amber-400" />
-            <span>NO TOLLS</span>
-          </span>
         )}
       </div>
 
-      {/* Top Right - Map Controls & Style Selector */}
-      <div className="absolute top-4 right-4 z-10 flex flex-col space-y-2">
-        <div className="glass-panel p-1 rounded-2xl flex items-center space-x-1">
-          <button
-            onClick={() => onTileStyleChange('streets')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-              tileStyle === 'streets'
-                ? 'bg-cyan-500 text-slate-950 font-bold shadow-lg shadow-cyan-500/30'
-                : 'text-slate-300 hover:text-white hover:bg-white/10'
-            }`}
-          >
-            Google Style
-          </button>
-          <button
-            onClick={() => onTileStyleChange('dark')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-              tileStyle === 'dark'
-                ? 'bg-cyan-500 text-slate-950 font-bold shadow-lg shadow-cyan-500/30'
-                : 'text-slate-300 hover:text-white hover:bg-white/10'
-            }`}
-          >
-            Neon Dark
-          </button>
-          <button
-            onClick={() => onTileStyleChange('satellite')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-              tileStyle === 'satellite'
-                ? 'bg-cyan-500 text-slate-950 font-bold shadow-lg shadow-cyan-500/30'
-                : 'text-slate-300 hover:text-white hover:bg-white/10'
-            }`}
-          >
-            Satellite
-          </button>
-        </div>
-
-        <div className="flex items-center space-x-2 justify-end">
-          <button
-            onClick={onToggleTrafficOverlay}
-            title="Toggle Traffic Colors Layer (Green/Amber/Red)"
-            className={`flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
-              showTrafficOverlay
-                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                : 'glass-panel text-slate-400 border-white/10'
-            }`}
-          >
-            <Activity className="w-3.5 h-3.5" />
-            <span>Traffic Overlay</span>
-          </button>
-
-          <button
-            onClick={onToggleTraffic}
-            title="Simulate Traffic Delay (Accumulates Waiting Time)"
-            className={`flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
-              isSimulatingTraffic
-                ? 'bg-amber-500/30 text-amber-300 border-amber-500/50 animate-pulse'
-                : 'glass-panel text-slate-300 border-white/10 hover:border-amber-500/40'
-            }`}
-          >
-            <AlertTriangle className="w-3.5 h-3.5" />
-            <span>{isSimulatingTraffic ? 'Traffic Jam (Waiting)' : 'Simulate Jam'}</span>
-          </button>
-
-          <button
-            onClick={handleRecenter}
-            title="Recenter Map on TukTuk"
-            className="glass-panel p-2 rounded-xl text-cyan-400 hover:text-white hover:border-cyan-500/40 transition-all"
-          >
-            <Navigation className="w-4 h-4" />
-          </button>
-        </div>
+      {/* Tapping Navigation Arrow Button: Centers Vehicle & Zooms in +3 Levels */}
+      <div className="absolute top-2 right-2 z-20">
+        <button
+          onClick={handleCenterAndZoomIn}
+          className="p-2.5 rounded-full bg-cyan-500 text-slate-950 font-black shadow-2xl hover:scale-110 active:scale-95 transition-all border border-cyan-300 flex items-center justify-center"
+          title="Re-Center & Zoom In +3 Levels to Vehicle"
+        >
+          <Navigation className="w-5 h-5 fill-slate-950" />
+        </button>
       </div>
 
-      {/* Map Traffic Legend Badge Bottom Left */}
-      <div className="absolute bottom-4 left-4 z-10 glass-panel px-3 py-1.5 rounded-xl text-[11px] font-mono text-slate-300 flex items-center space-x-3">
-        <div className="flex items-center space-x-1">
-          <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-          <span>Clear</span>
+      {/* Pinpoint Drag Crosshair Overlay */}
+      {isPinpointDraggingMode && (
+        <div className="absolute inset-0 z-30 pointer-events-none flex flex-col items-center justify-center">
+          <div className="relative flex items-center justify-center">
+            <div className="w-12 h-12 rounded-full border-2 border-rose-500 animate-ping"></div>
+            <Crosshair className="w-8 h-8 text-rose-500 absolute" />
+          </div>
+          <div className="mt-2 px-3 py-1 rounded-full bg-rose-600 text-white font-extrabold text-xs shadow-2xl pointer-events-auto">
+            DRAG MAP TO CENTER PIN
+          </div>
+          <button
+            onClick={onConfirmPinpoint}
+            className="mt-2 px-4 py-1.5 rounded-xl bg-emerald-500 text-slate-950 font-black text-xs shadow-2xl pointer-events-auto hover:scale-105 active:scale-95"
+          >
+            SET DESTINATION PIN
+          </button>
         </div>
-        <div className="flex items-center space-x-1">
-          <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-          <span>Moderate</span>
-        </div>
-        <div className="flex items-center space-x-1">
-          <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-          <span>Heavy Traffic</span>
-        </div>
+      )}
+
+      {/* Traffic Legend (Default Collapsed Toggle Badge) */}
+      <div className="absolute bottom-2 left-2 z-20">
+        {!showLegend ? (
+          <button
+            onClick={() => setShowLegend(true)}
+            className="px-2 py-1 glass-card rounded-lg text-[9px] text-cyan-300 border border-white/10 font-bold flex items-center space-x-1"
+          >
+            <Eye className="w-3 h-3 text-cyan-400" />
+            <span>Traffic Legend</span>
+          </button>
+        ) : (
+          <div
+            onClick={() => setShowLegend(false)}
+            className="px-2 py-1 glass-card rounded-lg border border-white/10 text-[9px] font-mono text-slate-300 flex items-center space-x-2 cursor-pointer"
+          >
+            <div className="flex items-center space-x-1"><span className="w-2 h-2 rounded-full bg-emerald-400"></span><span>Clear</span></div>
+            <div className="flex items-center space-x-1"><span className="w-2 h-2 rounded-full bg-amber-400"></span><span>Mod</span></div>
+            <div className="flex items-center space-x-1"><span className="w-2 h-2 rounded-full bg-rose-500"></span><span>Heavy</span></div>
+          </div>
+        )}
       </div>
     </div>
   );
