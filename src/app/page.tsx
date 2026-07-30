@@ -121,6 +121,7 @@ export default function Home() {
               confirmPinpointDestination();
             }
           }}
+          onToggleAvoidTolls={() => setAvoidTolls(!avoidTolls)}
         />
       </section>
 

@@ -176,21 +176,8 @@ export default function TelemetryPanel({
             <Radio className={`w-3 h-3 ${useRealGps ? 'text-emerald-400' : 'text-slate-500'}`} />
             <span>{useRealGps ? '📡 REAL GPS' : '📱 SIM GPS'}</span>
           </button>
-
-          {/* Avoid Expressways / Tolls Toggle */}
-          <button
-            onClick={onToggleAvoidTolls}
-            className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase flex items-center space-x-1 transition-all border ${
-              avoidTolls
-                ? 'bg-amber-500/30 text-amber-300 border-amber-500/50 shadow-md shadow-amber-500/20'
-                : 'glass-pill text-slate-400 border-white/10'
-            }`}
-            title={avoidTolls ? 'Avoiding Expressways & Toll Roads' : 'Expressways Allowed — Click to Avoid'}
-          >
-            <Ban className={`w-3 h-3 ${avoidTolls ? 'text-amber-400' : 'text-slate-500'}`} />
-            <span>{avoidTolls ? '🚫 NO HIGHWAY' : '🛣️ ANY ROAD'}</span>
-          </button>
         </div>
+
 
         <div className="flex items-center space-x-1.5">
           <button
@@ -323,7 +310,7 @@ export default function TelemetryPanel({
       )}
 
       {/* 3. MIDDLE HERO HUD TILES (Temporarily Displays Estimates before Start Ride, then Switches to Live Reads) */}
-      <div className="my-1.5 grid grid-cols-12 gap-2 items-stretch shrink-0 max-h-[55%]">
+      <div className="my-1.5 grid grid-cols-12 gap-2 items-stretch shrink-0 max-h-[72%]">
         {/* Left Hero Tile (7 Cols): TOTAL FARE + DISTANCE KM */}
         <div className="col-span-7 p-3 glass-card rounded-2xl border border-cyan-500/30 bg-gradient-to-br from-slate-900/95 via-cyan-950/40 to-slate-900/95 flex flex-col justify-between items-center relative overflow-hidden shadow-2xl">
           <div className="w-full flex items-center justify-between text-[10px] uppercase tracking-widest font-black text-cyan-300">
@@ -339,11 +326,11 @@ export default function TelemetryPanel({
           </div>
 
           <div className="flex items-baseline space-x-1 my-1">
-            <span className="text-lg font-black text-cyan-400">{tariff.currency}</span>
-            <span className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tighter font-mono glow-cyan leading-none">
+            <span className="text-2xl font-black text-cyan-400">{tariff.currency}</span>
+            <span className="text-6xl sm:text-7xl lg:text-8xl font-black tracking-tighter font-mono glow-cyan leading-none">
               {displayFare.toLocaleString('en-US')}
             </span>
-            <span className="text-sm font-bold text-slate-400">.00</span>
+            <span className="text-lg font-bold text-slate-400">.00</span>
           </div>
 
           <div className="w-full pt-1.5 border-t border-white/10 flex items-center justify-between px-1">
@@ -352,8 +339,8 @@ export default function TelemetryPanel({
               {isPreTripEstimate && <span className="text-[8px] text-amber-400">(Est)</span>}
             </span>
             <div className="flex items-baseline space-x-1">
-              <span className="text-2xl sm:text-3xl lg:text-4xl font-black font-mono glow-green leading-none">{displayDistance.toFixed(2)}</span>
-              <span className="text-xs font-bold text-emerald-400">KM</span>
+              <span className="text-3xl sm:text-4xl lg:text-5xl font-black font-mono glow-green leading-none">{displayDistance.toFixed(2)}</span>
+              <span className="text-sm font-bold text-emerald-400">KM</span>
             </div>
           </div>
         </div>
@@ -365,7 +352,7 @@ export default function TelemetryPanel({
               <Clock className="w-3.5 h-3.5 text-cyan-400" />
               <span>{isPreTripEstimate ? 'Est. Time' : 'Total Time'}</span>
             </div>
-            <div className="text-xl sm:text-2xl lg:text-3xl font-black font-mono text-cyan-200 mt-1 leading-none">
+            <div className="text-2xl sm:text-3xl lg:text-4xl font-black font-mono text-cyan-200 mt-1 leading-none">
               {displayTimeText}
             </div>
           </div>
@@ -375,7 +362,7 @@ export default function TelemetryPanel({
               <Clock className="w-3.5 h-3.5 text-amber-400" />
               <span>Wait Time</span>
             </div>
-            <div className="text-xl sm:text-2xl lg:text-3xl font-black font-mono glow-amber mt-1 leading-none">
+            <div className="text-2xl sm:text-3xl lg:text-4xl font-black font-mono glow-amber mt-1 leading-none">
               {formatTime(waitingSeconds)}
             </div>
           </div>
@@ -390,8 +377,8 @@ export default function TelemetryPanel({
             <span className="text-[10px] uppercase font-black">Speed</span>
           </div>
           <div className="flex items-baseline space-x-0.5">
-            <span className="text-2xl sm:text-3xl font-black font-mono text-cyan-300 leading-none">{currentSpeed}</span>
-            <span className="text-[9px] font-bold text-cyan-400">KM/H</span>
+            <span className="text-3xl sm:text-4xl font-black font-mono text-cyan-300 leading-none">{currentSpeed}</span>
+            <span className="text-xs font-bold text-cyan-400">KM/H</span>
           </div>
         </div>
 

@@ -245,55 +245,63 @@ export function useTripMeter() {
   // NOTE: Only 'exclude=motorway' is supported by the public OSRM demo server.
   // This effectively avoids Sri Lanka expressways (E01, E03, Southern Expressway)
   // which are all tagged as 'motorway' in OpenStreetMap.
+  // If exclude=motorway returns NoRoute, we retry without it (some routes have no alternative).
   const fetchOsrmRoute = useCallback(async (start: { lat: number, lng: number }, end: { lat: number, lng: number }) => {
-    try {
-      // exclude=motorway avoids expressways/toll roads in Sri Lanka (supported by public OSRM)
-      const excludeParam = avoidTolls ? '&exclude=motorway' : '';
-      const url = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson&steps=true${excludeParam}`;
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.code === 'Ok' && data.routes && data.routes[0]) {
-          const route = data.routes[0];
-          const distKm = route.distance / 1000;
-          const durMins = Math.round(route.duration / 60);
-          setEstimatedDistanceKm(distKm);
-          setEstimatedDurationMins(durMins);
-          setEstimatedFare(calcEstimatedFare(distKm, tariff));
+    const buildRoute = (coords: [number, number][], label: string): RoutePoint[] =>
+      coords.map((c, idx) => {
+        const nextC = coords[idx + 1] || c;
+        return { lat: c[1], lng: c[0], heading: getBearing(c[1], c[0], nextC[1], nextC[0]), streetName: label };
+      });
 
-          if (route.geometry && route.geometry.coordinates && route.geometry.coordinates.length > 1) {
-            const coords = route.geometry.coordinates;
-            const osrmPoints: RoutePoint[] = coords.map((c: [number, number], idx: number) => {
-              const nextC = coords[idx + 1] || c;
-              const h = getBearing(c[1], c[0], nextC[1], nextC[0]);
-              return {
-                lat: c[1],
-                lng: c[0],
-                heading: h,
-                streetName: avoidTolls ? "Local Road (No Expressway)" : "Sri Lanka Road",
-              };
-            });
-            setFullNavPath(osrmPoints);
-            setRouteIndex(0);
-            setRoutePath([osrmPoints[0]]);
-            return;
-          }
-        } else {
-          console.error('[OSRM] Route error:', data.code, data.message);
-        }
-      } else {
-        console.error('[OSRM] HTTP error:', res.status, await res.text());
+    const tryFetch = async (exclude: boolean) => {
+      const excludeParam = exclude ? '&exclude=motorway' : '';
+      const url = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson&steps=true${excludeParam}`;
+      try {
+        const res = await fetch(url);
+        if (!res.ok) { console.error('[OSRM] HTTP error:', res.status); return null; }
+        const data = await res.json();
+        if (data.code === 'Ok' && data.routes?.[0]) return data.routes[0];
+        console.warn('[OSRM] No route:', data.code, data.message);
+        return null;
+      } catch (err) {
+        console.error('[OSRM] Fetch failed:', err);
+        return null;
       }
-    } catch (err) {
-      console.error('[OSRM] Fetch failed:', err);
+    };
+
+    // First attempt: with exclude=motorway if avoidTolls enabled
+    let route = avoidTolls ? await tryFetch(true) : null;
+    let usedAvoid = !!route;
+
+    // Retry without exclude if first attempt failed (NoRoute / any error)
+    if (!route) {
+      route = await tryFetch(false);
+      usedAvoid = false;
     }
 
-    // Straight-line fallback (only used if OSRM completely unreachable)
+    if (route) {
+      const distKm = route.distance / 1000;
+      const durMins = Math.round(route.duration / 60);
+      setEstimatedDistanceKm(distKm);
+      setEstimatedDurationMins(durMins);
+      setEstimatedFare(calcEstimatedFare(distKm, tariff));
+
+      if (route.geometry?.coordinates?.length > 1) {
+        const label = usedAvoid ? 'Local Road (No Expressway)' : 'Sri Lanka Road';
+        const osrmPoints = buildRoute(route.geometry.coordinates, label);
+        setFullNavPath(osrmPoints);
+        setRouteIndex(0);
+        setRoutePath([osrmPoints[0]]);
+        return;
+      }
+    }
+
+    // Straight-line LAST resort — only if OSRM completely unreachable
+    console.error('[OSRM] All attempts failed — using straight-line fallback');
     const fallbackDist = getHaversineDistance(start.lat, start.lng, end.lat, end.lng);
     setEstimatedDistanceKm(fallbackDist);
     setEstimatedDurationMins(Math.round((fallbackDist / 25) * 60));
     setEstimatedFare(calcEstimatedFare(fallbackDist, tariff));
-
     setFullNavPath([
       { lat: start.lat, lng: start.lng, heading: 0 },
       { lat: end.lat, lng: end.lng, heading: 0 },

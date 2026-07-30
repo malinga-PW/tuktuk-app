@@ -4,7 +4,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { RoutePoint, LocationItem, TripStatus } from '@/hooks/useTripMeter';
-import { Navigation, Layers, Crosshair, Eye, MapPin, X, CheckCircle2, Target, Loader2 } from 'lucide-react';
+import { Navigation, Layers, Eye, Crosshair, Target, MapPin, Flag, Search, X, ChevronDown, Locate, Ban, Loader2, CheckCircle2 } from 'lucide-react';
 import { meterAudio } from '@/utils/audio';
 
 // Custom Rotating Vehicle Navigation Arrow Icon
@@ -150,6 +150,7 @@ interface InteractiveMapProps {
   onToggleTrafficOverlay: () => void;
   onMapCenterChange: (coords: { lat: number, lng: number }) => void;
   onConfirmPinpoint: (customCoords?: { lat: number, lng: number }) => void;
+  onToggleAvoidTolls: () => void;
 }
 
 export default function InteractiveMap({
@@ -162,6 +163,7 @@ export default function InteractiveMap({
   tileStyle,
   destinationLocation,
   isPinpointDraggingMode,
+  avoidTolls,
   searchResults,
   isSearchingPlaces,
   onSearchPlaces,
@@ -170,6 +172,7 @@ export default function InteractiveMap({
   onTogglePinpointMode,
   onTileStyleChange,
   onConfirmPinpoint,
+  onToggleAvoidTolls,
 }: InteractiveMapProps) {
   const [recenterTrigger, setRecenterTrigger] = useState<number>(0);
   const [showStyleMenu, setShowStyleMenu] = useState<boolean>(false);
@@ -380,6 +383,19 @@ export default function InteractiveMap({
           <Layers className="w-4 h-4 text-cyan-400" />
         </button>
 
+        {/* Avoid Expressways / Tolls Toggle */}
+        <button
+          onClick={onToggleAvoidTolls}
+          className={`p-1.5 rounded-xl text-[9px] font-black uppercase flex items-center space-x-1 transition-all border shadow-xl ${
+            avoidTolls
+              ? 'bg-amber-500/30 text-amber-300 border-amber-500/50 shadow-amber-500/20'
+              : 'glass-panel text-slate-400 border-white/10 hover:bg-white/10'
+          }`}
+          title={avoidTolls ? 'Avoiding Expressways — Click to allow' : 'All Roads — Click to avoid expressways'}
+        >
+          <Ban className={`w-3.5 h-3.5 ${avoidTolls ? 'text-amber-400' : 'text-slate-500'}`} />
+          <span>{avoidTolls ? 'NO HWY' : 'ANY RD'}</span>
+        </button>
         {showStyleMenu && (
           <div className="flex items-center space-x-1 glass-panel p-1 rounded-xl border border-cyan-500/30 animate-fadeIn">
             <button
