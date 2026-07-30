@@ -111,8 +111,7 @@ export function useTripMeter() {
     pickupLocationRef.current = pickupLocation;
   }, [pickupLocation]);
 
-  // Route Options (Strict Expressway & Toll Avoidance Enabled for TukTuks)
-  const [avoidTolls, setAvoidTolls] = useState<boolean>(true);
+  // Toll & highway avoidance is ALWAYS ON (hardcoded for TukTuk use)
   const [routeType, setRouteType] = useState<'fastest' | 'shortest'>('fastest');
 
   // Navigation route path state
@@ -241,10 +240,9 @@ export function useTripMeter() {
     return Math.round(total);
   }, []);
 
-  // Dual Routing Engine:
-  // - avoidTolls=true  → OpenRouteService (ORS) with avoid_features=["tollways","highways"]
-  // - avoidTolls=false → OSRM (fastest road route, no restrictions)
-  // ORS genuinely avoids toll roads; OSRM public server ignores the exclude parameter.
+  // Routing Engine:
+  // ALWAYS uses OpenRouteService (ORS) to avoid tollways + highways (hardcoded for TukTuks)
+  // Falls back to OSRM if ORS is unavailable.
   const fetchOsrmRoute = useCallback(async (start: { lat: number, lng: number }, end: { lat: number, lng: number }) => {
     const buildRoute = (coords: [number, number][], label: string): RoutePoint[] =>
       coords.map((c, idx) => {
@@ -252,44 +250,42 @@ export function useTripMeter() {
         return { lat: c[1], lng: c[0], heading: getBearing(c[1], c[0], nextC[1], nextC[0]), streetName: label };
       });
 
-    // --- ORS (OpenRouteService) for No-Highway mode ---
-    if (avoidTolls) {
-      try {
-        const orsUrl = 'https://api.openrouteservice.org/v2/directions/driving-car/geojson';
-        const orsBody = {
-          coordinates: [[start.lng, start.lat], [end.lng, end.lat]],
-          options: { avoid_features: ['tollways', 'highways'] },
-        };
-        const orsRes = await fetch(orsUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': '5b3ce3597851110001cf6248c0ec5e34a4944d1db1fc95cfe94c6b37' },
-          body: JSON.stringify(orsBody),
-        });
-        if (orsRes.ok) {
-          const orsData = await orsRes.json();
-          const feature = orsData?.features?.[0];
-          if (feature?.geometry?.coordinates?.length > 1) {
-            const props = feature.properties?.summary;
-            const distKm = (props?.distance ?? 0) / 1000;
-            const durMins = Math.round((props?.duration ?? 0) / 60);
-            setEstimatedDistanceKm(distKm);
-            setEstimatedDurationMins(durMins);
-            setEstimatedFare(calcEstimatedFare(distKm, tariff));
-            const orsPoints = buildRoute(feature.geometry.coordinates, 'Local Road (No Toll/Highway)');
-            setFullNavPath(orsPoints);
-            setRouteIndex(0);
-            setRoutePath([orsPoints[0]]);
-            return;
-          }
-        } else {
-          console.warn('[ORS] HTTP error:', orsRes.status, '— falling back to OSRM');
+    // --- PRIMARY: ORS always avoids toll roads and highways ---
+    try {
+      const orsUrl = 'https://api.openrouteservice.org/v2/directions/driving-car/geojson';
+      const orsBody = {
+        coordinates: [[start.lng, start.lat], [end.lng, end.lat]],
+        options: { avoid_features: ['tollways', 'highways'] },
+      };
+      const orsRes = await fetch(orsUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': '5b3ce3597851110001cf6248c0ec5e34a4944d1db1fc95cfe94c6b37' },
+        body: JSON.stringify(orsBody),
+      });
+      if (orsRes.ok) {
+        const orsData = await orsRes.json();
+        const feature = orsData?.features?.[0];
+        if (feature?.geometry?.coordinates?.length > 1) {
+          const props = feature.properties?.summary;
+          const distKm = (props?.distance ?? 0) / 1000;
+          const durMins = Math.round((props?.duration ?? 0) / 60);
+          setEstimatedDistanceKm(distKm);
+          setEstimatedDurationMins(durMins);
+          setEstimatedFare(calcEstimatedFare(distKm, tariff));
+          const orsPoints = buildRoute(feature.geometry.coordinates, 'Local Road (No Toll)');
+          setFullNavPath(orsPoints);
+          setRouteIndex(0);
+          setRoutePath([orsPoints[0]]);
+          return;
         }
-      } catch (err) {
-        console.warn('[ORS] Failed:', err, '— falling back to OSRM');
+      } else {
+        console.warn('[ORS] HTTP error:', orsRes.status, '— falling back to OSRM');
       }
+    } catch (err) {
+      console.warn('[ORS] Failed:', err, '— falling back to OSRM');
     }
 
-    // --- OSRM for normal routing (or ORS fallback) ---
+    // --- FALLBACK: OSRM (fastest road, no toll avoidance) ---
     try {
       const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson&steps=true`;
       const res = await fetch(osrmUrl);
@@ -315,7 +311,7 @@ export function useTripMeter() {
       console.error('[OSRM] Fetch failed:', err);
     }
 
-    // Straight-line LAST resort — only if both APIs unreachable
+    // Straight-line LAST resort — only if both APIs completely unreachable
     console.error('[Routing] All engines failed — using straight-line fallback');
     const fallbackDist = getHaversineDistance(start.lat, start.lng, end.lat, end.lng);
     setEstimatedDistanceKm(fallbackDist);
@@ -325,7 +321,7 @@ export function useTripMeter() {
       { lat: start.lat, lng: start.lng, heading: 0 },
       { lat: end.lat, lng: end.lng, heading: 0 },
     ]);
-  }, [tariff, calcEstimatedFare, avoidTolls]);
+  }, [tariff, calcEstimatedFare]);
 
   // Fetch OSRM Route only when destination or tolls option changes
   useEffect(() => {
@@ -337,7 +333,7 @@ export function useTripMeter() {
       setEstimatedFare(0);
       setFullNavPath([{ lat: pickupLocationRef.current.lat, lng: pickupLocationRef.current.lng, heading: vehicleHeading, streetName: pickupLocationRef.current.name }]);
     }
-  }, [destinationLocation, avoidTolls, fetchOsrmRoute, vehicleHeading]);
+  }, [destinationLocation, fetchOsrmRoute, vehicleHeading]);
 
   // Real Mobile GPS Tracking Handler
   useEffect(() => {
@@ -707,7 +703,6 @@ export function useTripMeter() {
     destinationLocation,
     isPinpointDraggingMode,
     mapCenterCoords,
-    avoidTolls,
     routeType,
     useRealGps,
     gpsError,
@@ -718,7 +713,6 @@ export function useTripMeter() {
     searchPlaces,
     clearAllTripData,
     setUseRealGps,
-    setAvoidTolls,
     setRouteType,
     setTariff,
     setPickupLocation,

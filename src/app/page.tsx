@@ -43,7 +43,6 @@ export default function Home() {
     pickupLocation,
     destinationLocation,
     isPinpointDraggingMode,
-    avoidTolls,
     useRealGps,
     gpsError,
     searchResults,
@@ -53,7 +52,6 @@ export default function Home() {
     searchPlaces,
     clearAllTripData,
     setUseRealGps,
-    setAvoidTolls,
     setTariff,
     setDestinationLocation,
     setIsPinpointDraggingMode,
@@ -96,7 +94,6 @@ export default function Home() {
           estimatedFare={estimatedFare}
           currency={tariff.currency}
           isPinpointDraggingMode={isPinpointDraggingMode}
-          avoidTolls={avoidTolls}
           searchResults={searchResults}
           isSearchingPlaces={isSearchingPlaces}
           onSearchPlaces={searchPlaces}
@@ -121,7 +118,6 @@ export default function Home() {
               confirmPinpointDestination();
             }
           }}
-          onToggleAvoidTolls={() => setAvoidTolls(!avoidTolls)}
         />
       </section>
 
@@ -143,11 +139,9 @@ export default function Home() {
           pickupLocation={pickupLocation}
           destinationLocation={destinationLocation}
           isPinpointDraggingMode={isPinpointDraggingMode}
-          avoidTolls={avoidTolls}
           useRealGps={useRealGps}
           gpsError={gpsError}
           onClearAll={clearAllTripData}
-          onToggleAvoidTolls={() => setAvoidTolls(!avoidTolls)}
           onToggleRealGps={() => setUseRealGps(!useRealGps)}
           onStart={startTrip}
           onPause={pauseTrip}

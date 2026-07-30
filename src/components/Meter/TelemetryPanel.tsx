@@ -20,11 +20,9 @@ interface TelemetryPanelProps {
   pickupLocation: LocationItem;
   destinationLocation: LocationItem | null;
   isPinpointDraggingMode: boolean;
-  avoidTolls: boolean;
   useRealGps: boolean;
   gpsError: string | null;
   onClearAll: () => void;
-  onToggleAvoidTolls: () => void;
   onToggleRealGps: () => void;
   onStart: () => void;
   onPause: () => void;
@@ -54,11 +52,9 @@ export default function TelemetryPanel({
   isHudMirrored,
   pickupLocation,
   destinationLocation,
-  avoidTolls,
   useRealGps,
   gpsError,
   onClearAll,
-  onToggleAvoidTolls,
   onToggleRealGps,
   onStart,
   onPause,
