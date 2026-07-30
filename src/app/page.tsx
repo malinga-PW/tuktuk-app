@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { useTripMeter } from '@/hooks/useTripMeter';
 import TelemetryPanel from '@/components/Meter/TelemetryPanel';
@@ -72,6 +72,28 @@ export default function Home() {
   const [isTariffModalOpen, setIsTariffModalOpen] = useState(false);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+
+  // Wake Lock — keep screen always on while app is open
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+  useEffect(() => {
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLockRef.current = await (navigator as Navigator & { wakeLock: { request: (type: string) => Promise<WakeLockSentinel> } }).wakeLock.request('screen');
+        }
+      } catch (err) {
+        console.warn('[WakeLock] Not acquired:', err);
+      }
+    };
+    requestWakeLock();
+    // Re-acquire on tab visibility change (screen unlock, etc.)
+    const onVisibilityChange = () => { if (document.visibilityState === 'visible') requestWakeLock(); };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      wakeLockRef.current?.release();
+    };
+  }, []);
 
   return (
     <main className="w-screen h-screen p-1 md:p-2 flex flex-col sm:flex-row justify-between overflow-hidden bg-slate-950 text-white space-y-1 sm:space-y-0 sm:space-x-2">
