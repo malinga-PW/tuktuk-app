@@ -127,7 +127,39 @@ export default function TelemetryPanel({
 
   return (
     <div className={`w-full h-full flex flex-col justify-between p-2 glass-panel rounded-2xl border border-white/10 overflow-hidden ${isHudMirrored ? 'hud-mirror' : ''}`}>
-      {/* 1. TOP HEADER SECTION */}
+
+      {/* ─── RESET CONFIRMATION MODAL (Full-Screen Centered Popup) ─── */}
+      {confirmReset && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/75 backdrop-blur-md animate-fadeIn">
+          <div className="glass-panel border border-rose-500/60 rounded-3xl p-6 mx-4 max-w-xs w-full shadow-2xl flex flex-col items-center space-y-4">
+            {/* Icon */}
+            <div className="w-14 h-14 rounded-full bg-rose-500/20 border-2 border-rose-500/60 flex items-center justify-center">
+              <RotateCcw className="w-7 h-7 text-rose-400" />
+            </div>
+            {/* Title */}
+            <div className="text-center">
+              <h3 className="text-base font-black text-white uppercase tracking-wider">Reset Everything?</h3>
+              <p className="text-[11px] text-slate-400 mt-1 font-mono">This will clear all trip data, destination, and route. This cannot be undone.</p>
+            </div>
+            {/* Buttons */}
+            <div className="w-full grid grid-cols-2 gap-3 pt-1">
+              <button
+                onClick={() => setConfirmReset(false)}
+                className="py-3 rounded-2xl glass-card border border-white/20 text-slate-300 font-black text-sm hover:bg-white/10 transition-all"
+              >
+                CANCEL
+              </button>
+              <button
+                onClick={handleConfirmReset}
+                className="py-3 rounded-2xl bg-gradient-to-r from-rose-500 to-red-600 text-white font-black text-sm shadow-xl shadow-rose-500/30 border border-rose-400 hover:scale-[1.02] active:scale-[0.97] transition-all"
+              >
+                YES, RESET
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between pb-1.5 border-b border-white/10 shrink-0">
         <div className="flex items-center space-x-1.5">
           <button
@@ -163,20 +195,7 @@ export default function TelemetryPanel({
             <span>{isFullscreen ? 'EXIT' : '📺 FULL'}</span>
           </button>
 
-          {confirmReset ? (
-            <div className="flex items-center space-x-1 px-2 py-1 rounded-xl bg-rose-600/90 border border-rose-400 animate-fadeIn">
-              <span className="text-[9px] font-black text-white">Sure?</span>
-              <button
-                onClick={handleConfirmReset}
-                className="px-2 py-0.5 rounded-lg bg-white text-rose-700 text-[9px] font-black"
-              >YES</button>
-              <button
-                onClick={() => setConfirmReset(false)}
-                className="px-2 py-0.5 rounded-lg bg-slate-700 text-white text-[9px] font-black"
-              >NO</button>
-            </div>
-          ) : (
-            <button
+          <button
               onClick={handleResetClick}
               disabled={status === 'RUNNING' || status === 'PAUSED'}
               className={`px-2.5 py-1 rounded-xl font-extrabold text-[10px] flex items-center space-x-1 transition-all shadow-md border ${
@@ -189,7 +208,6 @@ export default function TelemetryPanel({
               <RotateCcw className="w-3 h-3" />
               <span>RESET</span>
             </button>
-          )}
 
           <button
             onClick={() => setShowControlPanel(!showControlPanel)}
