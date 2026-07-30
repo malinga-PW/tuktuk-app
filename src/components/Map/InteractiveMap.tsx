@@ -1,25 +1,24 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { RoutePoint, LocationItem } from '@/hooks/useTripMeter';
-import { Navigation, Layers, ShieldAlert, AlertTriangle, Crosshair, MapPin, Eye } from 'lucide-react';
+import { Navigation, Layers, Crosshair, Eye } from 'lucide-react';
 import { meterAudio } from '@/utils/audio';
 
-// Custom TukTuk Vehicle Icon
+// Custom Smaller TukTuk Vehicle Icon (No round background shape)
 const tuktukIcon = L.divIcon({
-  className: 'tuktuk-marker-icon',
+  className: 'tuktuk-marker-icon-clean',
   html: `
     <div class="relative flex items-center justify-center">
-      <div class="tuktuk-pulse"></div>
-      <div class="w-10 h-10 rounded-full bg-slate-900 border-2 border-cyan-400 shadow-xl flex items-center justify-center text-xl z-10">
+      <div class="w-7 h-7 text-2xl filter drop-shadow-md animate-pulse">
         🛺
       </div>
     </div>
   `,
-  iconSize: [44, 44],
-  iconAnchor: [22, 22],
+  iconSize: [28, 28],
+  iconAnchor: [14, 14],
 });
 
 // Destination Pin Icon
@@ -27,13 +26,13 @@ const destIcon = L.divIcon({
   className: 'dest-marker-icon',
   html: `
     <div class="relative flex items-center justify-center">
-      <div class="w-9 h-9 rounded-full bg-rose-600 border-2 border-white shadow-2xl flex items-center justify-center text-white z-10 animate-bounce">
+      <div class="w-8 h-8 rounded-full bg-rose-600 border-2 border-white shadow-2xl flex items-center justify-center text-white z-10 animate-bounce">
         📍
       </div>
     </div>
   `,
-  iconSize: [36, 36],
-  iconAnchor: [18, 36],
+  iconSize: [32, 32],
+  iconAnchor: [16, 32],
 });
 
 interface MapControllerProps {
@@ -91,13 +90,9 @@ export default function InteractiveMap({
   fullNavPath,
   currentSpeed,
   tileStyle,
-  isSimulatingTraffic,
-  showTrafficOverlay,
   destinationLocation,
   isPinpointDraggingMode,
   onTileStyleChange,
-  onToggleTraffic,
-  onToggleTrafficOverlay,
   onMapCenterChange,
   onConfirmPinpoint,
 }: InteractiveMapProps) {
@@ -121,7 +116,7 @@ export default function InteractiveMap({
   const drivenPolylineCoords: [number, number][] = routePath.map((p) => [p.lat, p.lng]);
 
   const handleCenterAndZoomIn = () => {
-    setTargetZoom(18); // Zoom Level 18 (Level +3 close up driving view)
+    setTargetZoom(18); // Zoom Level 18 (Level +3 close up view)
     meterAudio.speak("Map centered close-up.");
   };
 
@@ -167,7 +162,7 @@ export default function InteractiveMap({
           />
         )}
 
-        {/* TukTuk Vehicle Marker */}
+        {/* Smaller TukTuk Vehicle Marker (Clean transparent) */}
         <Marker position={[currentPosition.lat, currentPosition.lng]} icon={tuktukIcon}>
           <Popup>
             <div className="text-xs font-mono font-bold text-slate-900">
@@ -189,7 +184,7 @@ export default function InteractiveMap({
         )}
       </MapContainer>
 
-      {/* Floating Map Controls Bar (Collapsible Sleek Icon Menu) */}
+      {/* Floating Map Controls Bar */}
       <div className="absolute top-2 left-2 z-20 flex items-center space-x-1.5">
         <button
           onClick={() => setShowStyleMenu(!showStyleMenu)}
@@ -253,7 +248,7 @@ export default function InteractiveMap({
         </div>
       )}
 
-      {/* Traffic Legend (Default Collapsed Toggle Badge) */}
+      {/* Traffic Legend Toggle Badge */}
       <div className="absolute bottom-2 left-2 z-20">
         {!showLegend ? (
           <button
