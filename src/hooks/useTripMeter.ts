@@ -242,11 +242,14 @@ export function useTripMeter() {
   }, []);
 
   // OSRM Real-Road Routing Engine
-  // NOTE: The public OSRM demo server does NOT support &exclude=toll,motorway.
-  // Removing that parameter so road-following routes are returned correctly.
+  // NOTE: Only 'exclude=motorway' is supported by the public OSRM demo server.
+  // This effectively avoids Sri Lanka expressways (E01, E03, Southern Expressway)
+  // which are all tagged as 'motorway' in OpenStreetMap.
   const fetchOsrmRoute = useCallback(async (start: { lat: number, lng: number }, end: { lat: number, lng: number }) => {
     try {
-      const url = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson&steps=true`;
+      // exclude=motorway avoids expressways/toll roads in Sri Lanka (supported by public OSRM)
+      const excludeParam = avoidTolls ? '&exclude=motorway' : '';
+      const url = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson&steps=true${excludeParam}`;
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
@@ -267,7 +270,7 @@ export function useTripMeter() {
                 lat: c[1],
                 lng: c[0],
                 heading: h,
-                streetName: "Sri Lanka Road",
+                streetName: avoidTolls ? "Local Road (No Expressway)" : "Sri Lanka Road",
               };
             });
             setFullNavPath(osrmPoints);
@@ -295,7 +298,7 @@ export function useTripMeter() {
       { lat: start.lat, lng: start.lng, heading: 0 },
       { lat: end.lat, lng: end.lng, heading: 0 },
     ]);
-  }, [tariff, calcEstimatedFare]);
+  }, [tariff, calcEstimatedFare, avoidTolls]);
 
   // Fetch OSRM Route only when destination or tolls option changes
   useEffect(() => {
@@ -307,7 +310,7 @@ export function useTripMeter() {
       setEstimatedFare(0);
       setFullNavPath([{ lat: pickupLocationRef.current.lat, lng: pickupLocationRef.current.lng, heading: vehicleHeading, streetName: pickupLocationRef.current.name }]);
     }
-  }, [destinationLocation, fetchOsrmRoute, vehicleHeading]);
+  }, [destinationLocation, avoidTolls, fetchOsrmRoute, vehicleHeading]);
 
   // Real Mobile GPS Tracking Handler
   useEffect(() => {

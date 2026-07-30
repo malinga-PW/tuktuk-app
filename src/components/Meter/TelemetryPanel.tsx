@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { TripStatus, TariffConfig, LocationItem } from '@/hooks/useTripMeter';
-import { Play, Pause, Square, RotateCcw, Settings, Receipt, Volume2, VolumeX, Zap, Sliders, ShieldAlert, Radio, Clock, Gauge, Maximize, Minimize, History, MapPin, Flag } from 'lucide-react';
+import { Play, Pause, Square, RotateCcw, Settings, Receipt, Volume2, VolumeX, Zap, Sliders, ShieldAlert, Radio, Clock, Gauge, Maximize, Minimize, History, MapPin, Flag, Ban } from 'lucide-react';
 
 interface TelemetryPanelProps {
   status: TripStatus;
@@ -54,9 +54,11 @@ export default function TelemetryPanel({
   isHudMirrored,
   pickupLocation,
   destinationLocation,
+  avoidTolls,
   useRealGps,
   gpsError,
   onClearAll,
+  onToggleAvoidTolls,
   onToggleRealGps,
   onStart,
   onPause,
@@ -173,6 +175,20 @@ export default function TelemetryPanel({
           >
             <Radio className={`w-3 h-3 ${useRealGps ? 'text-emerald-400' : 'text-slate-500'}`} />
             <span>{useRealGps ? '📡 REAL GPS' : '📱 SIM GPS'}</span>
+          </button>
+
+          {/* Avoid Expressways / Tolls Toggle */}
+          <button
+            onClick={onToggleAvoidTolls}
+            className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase flex items-center space-x-1 transition-all border ${
+              avoidTolls
+                ? 'bg-amber-500/30 text-amber-300 border-amber-500/50 shadow-md shadow-amber-500/20'
+                : 'glass-pill text-slate-400 border-white/10'
+            }`}
+            title={avoidTolls ? 'Avoiding Expressways & Toll Roads' : 'Expressways Allowed — Click to Avoid'}
+          >
+            <Ban className={`w-3 h-3 ${avoidTolls ? 'text-amber-400' : 'text-slate-500'}`} />
+            <span>{avoidTolls ? '🚫 NO HIGHWAY' : '🛣️ ANY ROAD'}</span>
           </button>
         </div>
 
