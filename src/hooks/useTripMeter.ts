@@ -46,8 +46,8 @@ export interface SavedTripRecord {
 
 export const INITIAL_REAL_GPS_PICKUP: LocationItem = {
   id: 'pickup-gps-auto',
-  name: 'Current GPS Location',
-  address: 'Live device location',
+  name: 'Current Location',
+  address: 'Detecting GPS Address...',
   lat: 6.92712,
   lng: 79.86120,
 };
@@ -97,6 +97,7 @@ export function useTripMeter() {
   const wakeLockRef = useRef<unknown | null>(null);
   const lastAnnouncedKmRef = useRef<number>(0);
   const prevCoordsRef = useRef<{ lat: number, lng: number } | null>(null);
+  const lastReverseGeocodedRef = useRef<string>('');
 
   // Locations state
   const [pickupLocation, setPickupLocation] = useState<LocationItem>(INITIAL_REAL_GPS_PICKUP);
@@ -141,6 +142,34 @@ export function useTripMeter() {
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Reverse Geocode helper to convert current GPS coords to real street/city name
+  const fetchReverseGeocode = useCallback(async (lat: number, lng: number) => {
+    const key = `${lat.toFixed(3)},${lng.toFixed(3)}`;
+    if (lastReverseGeocodedRef.current === key) return;
+    lastReverseGeocodedRef.current = key;
+
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.display_name) {
+          const parts = data.display_name.split(',');
+          const mainName = parts[0] || 'Current Location';
+          const subLocation = parts.slice(1, 3).join(',').trim();
+          setPickupLocation({
+            id: 'real-gps-named',
+            name: mainName,
+            address: subLocation || data.display_name,
+            lat,
+            lng,
+          });
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  }, []);
+
   // Load Trip History from localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -183,26 +212,19 @@ export function useTripMeter() {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const { latitude, longitude, heading } = pos.coords;
-          const realPickup: LocationItem = {
-            id: 'real-pickup-initial',
-            name: 'Current Location (Real GPS)',
-            address: `GPS (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`,
-            lat: latitude,
-            lng: longitude,
-          };
-          setPickupLocation(realPickup);
           setMapCenterCoords({ lat: latitude, lng: longitude });
           if (heading !== null && heading !== undefined && !isNaN(heading)) {
             setVehicleHeading(heading);
           }
           setRoutePath([{ lat: latitude, lng: longitude, heading: heading || 0, streetName: 'Current Location' }]);
           prevCoordsRef.current = { lat: latitude, lng: longitude };
+          fetchReverseGeocode(latitude, longitude);
         },
         () => {},
         { enableHighAccuracy: false, timeout: 30000, maximumAge: 10000 }
       );
     }
-  }, []);
+  }, [fetchReverseGeocode]);
 
   // Calculate estimated fare helper
   const calcEstimatedFare = useCallback((distKm: number, tariffCfg: TariffConfig) => {
@@ -314,15 +336,7 @@ export function useTripMeter() {
         setVehicleHeading(currentHeading);
         prevCoordsRef.current = { lat: latitude, lng: longitude };
 
-        const newPoint: LocationItem = {
-          id: 'real-gps',
-          name: 'Live Device GPS Location',
-          address: `GPS (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`,
-          lat: latitude,
-          lng: longitude,
-        };
-
-        setPickupLocation(newPoint);
+        fetchReverseGeocode(latitude, longitude);
 
         if (status === 'RUNNING') {
           setRoutePath((prev) => {
@@ -342,7 +356,7 @@ export function useTripMeter() {
                 meterAudio.playTick();
               }
             }
-            return [...prev, { lat: latitude, lng: longitude, heading: currentHeading, streetName: "Live GPS Road" }];
+            return [...prev, { lat: latitude, lng: longitude, heading: currentHeading, streetName: pickupLocation.name }];
           });
         }
       },
@@ -365,9 +379,9 @@ export function useTripMeter() {
         navigator.geolocation.clearWatch(watchIdRef.current);
       }
     };
-  }, [useRealGps, status, vehicleHeading]);
+  }, [useRealGps, status, vehicleHeading, fetchReverseGeocode, pickupLocation.name]);
 
-  // Multi-Engine Business Search (Combines Nominatim, Photon, and OpenStreetMap Business POIs in Sri Lanka)
+  // Multi-Engine Search
   const searchPlaces = useCallback(async (query: string) => {
     if (!query || query.trim().length < 2) {
       setSearchResults([]);
@@ -378,7 +392,6 @@ export function useTripMeter() {
     const resultsMap = new Map<string, LocationItem>();
 
     try {
-      // Engine 1: Photon Komoot (Fast Business & Shop Index in Sri Lanka)
       const photonPromise = fetch(
         `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&bbox=79.5,5.9,81.9,9.8&limit=8`
       ).then(async (res) => {
@@ -403,7 +416,6 @@ export function useTripMeter() {
         }
       }).catch(() => {});
 
-      // Engine 2: OpenStreetMap Nominatim Sri Lanka
       const nominatimPromise = fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query + ' Sri Lanka')}&countrycodes=lk&limit=8`
       ).then(async (res) => {
