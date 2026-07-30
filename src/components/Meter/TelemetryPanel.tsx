@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { TripStatus, TariffConfig, LocationItem } from '@/hooks/useTripMeter';
-import { Play, Pause, Square, RotateCcw, Settings, Receipt, Volume2, VolumeX, Zap, Sliders, Plus, Minus, MapPin, Target, CheckCircle2, ShieldAlert, X, Radio, Clock, Gauge, Maximize, Minimize } from 'lucide-react';
+import { Play, Pause, Square, RotateCcw, Settings, Receipt, Volume2, VolumeX, Zap, Sliders, ShieldAlert, Radio, Clock, Gauge, Maximize, Minimize, History } from 'lucide-react';
 
 interface TelemetryPanelProps {
   status: TripStatus;
@@ -20,9 +20,6 @@ interface TelemetryPanelProps {
   avoidTolls: boolean;
   useRealGps: boolean;
   gpsError: string | null;
-  searchResults: LocationItem[];
-  isSearchingPlaces: boolean;
-  onSearchPlaces: (query: string) => void;
   onClearAll: () => void;
   onToggleAvoidTolls: () => void;
   onToggleRealGps: () => void;
@@ -35,10 +32,8 @@ interface TelemetryPanelProps {
   onToggleMirror: () => void;
   onOpenTariffModal: () => void;
   onOpenReceiptModal: () => void;
+  onOpenHistoryModal: () => void;
   onUpdateTariff: (fn: (prev: TariffConfig) => TariffConfig) => void;
-  onSelectDestination: (dest: LocationItem) => void;
-  onClearDestination: () => void;
-  onTogglePinpointMode: () => void;
 }
 
 export default function TelemetryPanel({
@@ -51,13 +46,8 @@ export default function TelemetryPanel({
   tariff,
   isAudioMuted,
   isHudMirrored,
-  destinationLocation,
-  isPinpointDraggingMode,
   useRealGps,
   gpsError,
-  searchResults,
-  isSearchingPlaces,
-  onSearchPlaces,
   onClearAll,
   onToggleRealGps,
   onStart,
@@ -68,32 +58,11 @@ export default function TelemetryPanel({
   onToggleMute,
   onOpenTariffModal,
   onOpenReceiptModal,
+  onOpenHistoryModal,
   onUpdateTariff,
-  onSelectDestination,
-  onClearDestination,
-  onTogglePinpointMode,
 }: TelemetryPanelProps) {
   const [showControlPanel, setShowControlPanel] = useState(false);
-  const [searchQuery, setSearchQuery] = useState(destinationLocation ? destinationLocation.name : '');
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-
-  useEffect(() => {
-    if (destinationLocation) {
-      setSearchQuery(destinationLocation.name);
-    } else {
-      setSearchQuery('');
-    }
-  }, [destinationLocation]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (searchQuery.trim().length >= 2) {
-        onSearchPlaces(searchQuery);
-      }
-    }, 350);
-    return () => clearTimeout(timer);
-  }, [searchQuery, onSearchPlaces]);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -125,15 +94,9 @@ export default function TelemetryPanel({
     onUpdateTariff((prev) => ({ ...prev, waitRatePerMin: Math.max(0, prev.waitRatePerMin + delta) }));
   };
 
-  const handleClearDestination = () => {
-    setSearchQuery('');
-    onClearDestination();
-    setIsSearchOpen(false);
-  };
-
   return (
     <div className={`w-full h-full flex flex-col justify-between p-2 glass-panel rounded-2xl border border-white/10 ${isHudMirrored ? 'hud-mirror' : ''}`}>
-      {/* 1. Top Title Header Bar (Status, GPS, Fullscreen, Reset, Rate Adjust, Settings, Audio) */}
+      {/* 1. Top Title Header Bar (Status, GPS, History, Fullscreen, Reset, Rate Adjust, Settings, Audio) */}
       <div className="flex items-center justify-between pb-1 border-b border-white/10 shrink-0">
         <div className="flex items-center space-x-1">
           <div className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider flex items-center space-x-1 ${
@@ -165,7 +128,17 @@ export default function TelemetryPanel({
         </div>
 
         <div className="flex items-center space-x-1">
-          {/* Fullscreen Toggle Button */}
+          {/* Trip History Modal Button */}
+          <button
+            onClick={onOpenHistoryModal}
+            className="px-2 py-0.5 rounded-lg glass-card border border-white/15 hover:border-cyan-400 text-cyan-300 text-[9px] font-extrabold flex items-center space-x-1 transition-all"
+            title="View Saved Trip History & Daily Revenue"
+          >
+            <History className="w-2.5 h-2.5 text-cyan-400" />
+            <span>📜 HISTORY</span>
+          </button>
+
+          {/* Fullscreen Button */}
           <button
             onClick={toggleFullscreen}
             className="px-2 py-0.5 rounded-lg glass-card border border-white/15 hover:border-cyan-400 text-cyan-300 text-[9px] font-extrabold flex items-center space-x-1 transition-all"
@@ -176,10 +149,7 @@ export default function TelemetryPanel({
           </button>
 
           <button
-            onClick={() => {
-              setSearchQuery('');
-              onClearAll();
-            }}
+            onClick={onClearAll}
             className="px-2 py-0.5 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/40 font-extrabold text-[9px] flex items-center space-x-1 transition-all"
             title="Fresh Start / Reset All"
           >
@@ -222,70 +192,6 @@ export default function TelemetryPanel({
         </div>
       )}
 
-      {/* 2. Destination Search & Drag Pin Row */}
-      <div className="my-1 p-1.5 glass-card rounded-xl border border-white/10 flex items-center space-x-1.5 relative shrink-0">
-        <MapPin className="w-3.5 h-3.5 text-rose-400 flex-shrink-0 fill-rose-400" />
-        <div className="flex-1 relative">
-          <div className="flex items-center space-x-1 relative">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setIsSearchOpen(true);
-              }}
-              onFocus={() => setIsSearchOpen(true)}
-              placeholder="(Optional) Search destination or tap start..."
-              className="w-full bg-slate-900/90 border border-white/15 px-2 py-1 pr-6 rounded-md text-xs font-bold text-white focus:outline-none focus:border-cyan-400"
-            />
-            {searchQuery && (
-              <button
-                onClick={handleClearDestination}
-                className="absolute right-1.5 text-slate-400 hover:text-white"
-                title="Clear Destination"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-          {isSearchOpen && searchResults.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-1 z-50 glass-panel rounded-xl border border-cyan-500/40 max-h-36 overflow-y-auto shadow-2xl p-1 bg-slate-950">
-              {searchResults.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    onSelectDestination(item);
-                    setSearchQuery(item.name);
-                    setIsSearchOpen(false);
-                  }}
-                  className="w-full text-left p-1 hover:bg-cyan-500/20 rounded-md flex items-center justify-between text-[10px] transition-colors border-b border-white/5 last:border-0"
-                >
-                  <div className="overflow-hidden mr-1">
-                    <div className="font-bold text-white truncate text-[10px]">{item.name}</div>
-                    <div className="text-[8px] text-slate-400 font-mono truncate">{item.address}</div>
-                  </div>
-                  <CheckCircle2 className="w-3 h-3 text-cyan-400 flex-shrink-0" />
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <button
-          onClick={onTogglePinpointMode}
-          className={`px-2 py-1 rounded text-[9px] font-black transition-all border shrink-0 flex items-center space-x-1 ${
-            isPinpointDraggingMode
-              ? 'bg-rose-500 text-white border-rose-400 animate-pulse'
-              : 'glass-pill text-cyan-300 border-cyan-500/30'
-          }`}
-          title="Drag Map Center"
-        >
-          <Target className="w-3 h-3" />
-          <span>{isPinpointDraggingMode ? 'PINNING' : 'DRAG PIN'}</span>
-        </button>
-      </div>
-
       {/* Rate Control Drawer */}
       {showControlPanel && (
         <div className="my-0.5 p-1.5 glass-card rounded-xl border border-cyan-500/30 space-y-1 animate-fadeIn bg-slate-900/90 shadow-xl shrink-0">
@@ -320,66 +226,66 @@ export default function TelemetryPanel({
         </div>
       )}
 
-      {/* 3. HERO LAYOUT: Increased Font Sizes for Total Fare & Distance */}
+      {/* 2. HERO LAYOUT: Extra Large Passenger Readouts for Total Fare & Distance */}
       <div className="my-1 grid grid-cols-12 gap-1.5 items-stretch flex-1">
-        {/* Left Hero Box (7 Cols): TOTAL FARE + DISTANCE KM (Increased Font Sizes) */}
-        <div className="col-span-7 p-2 glass-card rounded-xl border border-cyan-500/20 bg-gradient-to-br from-slate-900/90 via-cyan-950/20 to-slate-900/90 flex flex-col justify-between items-center relative overflow-hidden">
-          <div className="text-[9px] uppercase tracking-widest font-black text-cyan-300/90 mb-0.5 flex items-center space-x-1">
-            <Zap className="w-3 h-3 text-cyan-400 animate-pulse" />
+        {/* Left Hero Box (7 Cols): TOTAL FARE + DISTANCE KM (EXTRA LARGE PASSENGER READOUT) */}
+        <div className="col-span-7 p-2.5 glass-card rounded-2xl border border-cyan-500/30 bg-gradient-to-br from-slate-900/90 via-cyan-950/30 to-slate-900/90 flex flex-col justify-between items-center relative overflow-hidden shadow-2xl">
+          <div className="text-[10px] uppercase tracking-widest font-black text-cyan-300 mb-0.5 flex items-center space-x-1">
+            <Zap className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
             <span>TOTAL FARE ({tariff.currency})</span>
           </div>
 
           <div className="flex items-baseline space-x-1 my-auto">
-            <span className="text-sm font-black text-cyan-400/90">{tariff.currency}</span>
-            <span className="text-5xl sm:text-6xl font-black tracking-tight font-mono glow-cyan">
+            <span className="text-base font-black text-cyan-400">{tariff.currency}</span>
+            <span className="text-6xl sm:text-7xl font-black tracking-tight font-mono glow-cyan">
               {totalFare.toLocaleString('en-US')}
             </span>
-            <span className="text-xs font-bold text-slate-400">.00</span>
+            <span className="text-sm font-bold text-slate-400">.00</span>
           </div>
 
-          {/* Integrated Distance Badge inside Hero Box (Increased font size) */}
-          <div className="w-full pt-1 border-t border-white/10 flex items-center justify-between px-2">
-            <span className="text-[9px] uppercase font-black text-slate-400">Distance</span>
+          {/* Integrated Distance Badge (EXTRA LARGE) */}
+          <div className="w-full pt-1.5 border-t border-white/10 flex items-center justify-between px-2">
+            <span className="text-[10px] uppercase font-black text-slate-300">Distance</span>
             <div className="flex items-baseline space-x-1">
-              <span className="text-2xl sm:text-3xl font-black font-mono glow-green">{distanceKm.toFixed(2)}</span>
+              <span className="text-3xl sm:text-4xl font-black font-mono glow-green">{distanceKm.toFixed(2)}</span>
               <span className="text-xs font-bold text-emerald-400">KM</span>
             </div>
           </div>
         </div>
 
-        {/* Right Stack (5 Cols): TOTAL TIME & WAIT TIME (Increased Font Sizes) */}
-        <div className="col-span-5 grid grid-rows-2 gap-1">
-          <div className="p-1.5 glass-card rounded-xl border border-white/5 flex flex-col justify-center items-center">
-            <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1">
-              <Clock className="w-3 h-3 text-cyan-400" />
+        {/* Right Stack (5 Cols): TOTAL TIME & WAIT TIME (EXTRA LARGE PASSENGER READOUT) */}
+        <div className="col-span-5 grid grid-rows-2 gap-1.5">
+          <div className="p-2 glass-card rounded-xl border border-white/10 flex flex-col justify-center items-center">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1">
+              <Clock className="w-3.5 h-3.5 text-cyan-400" />
               <span>Total Time</span>
             </div>
-            <div className="text-lg sm:text-xl font-black font-mono text-cyan-200 mt-0.5">
+            <div className="text-xl sm:text-2xl font-black font-mono text-cyan-200 mt-0.5">
               {formatTime(elapsedSeconds)}
             </div>
           </div>
 
-          <div className="p-1.5 glass-card rounded-xl border border-white/5 flex flex-col justify-center items-center">
-            <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1">
-              <Clock className="w-3 h-3 text-amber-400" />
+          <div className="p-2 glass-card rounded-xl border border-white/10 flex flex-col justify-center items-center">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1">
+              <Clock className="w-3.5 h-3.5 text-amber-400" />
               <span>Wait Time</span>
             </div>
-            <div className="text-lg sm:text-xl font-black font-mono glow-amber mt-0.5">
+            <div className="text-xl sm:text-2xl font-black font-mono glow-amber mt-0.5">
               {formatTime(waitingSeconds)}
             </div>
           </div>
         </div>
       </div>
 
-      {/* 4. BOTTOM ACTION SECTION: Speed Badge (Increased Font Size) + Driving Action Button */}
+      {/* 3. BOTTOM ACTION SECTION: Extra Large Speed Badge + Driving Action Button */}
       <div className="pt-1 flex items-center space-x-1.5 shrink-0">
-        <div className="w-[35%] p-2 glass-card rounded-xl border border-cyan-500/30 flex items-center justify-between px-2">
+        <div className="w-[35%] p-2 glass-card rounded-xl border border-cyan-500/40 flex items-center justify-between px-2">
           <div className="flex items-center space-x-1 text-slate-400">
             <Gauge className="w-4 h-4 text-cyan-400" />
             <span className="text-[9px] uppercase font-black">Speed</span>
           </div>
           <div className="flex items-baseline space-x-0.5">
-            <span className="text-xl sm:text-2xl font-black font-mono text-cyan-300">{currentSpeed}</span>
+            <span className="text-2xl sm:text-3xl font-black font-mono text-cyan-300">{currentSpeed}</span>
             <span className="text-[9px] font-bold text-cyan-400">KM/H</span>
           </div>
         </div>
@@ -391,7 +297,7 @@ export default function TelemetryPanel({
               className="w-full py-3 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-1.5 shadow-xl shadow-emerald-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all"
             >
               <Play className="w-4 h-4 fill-slate-950" />
-              <span>{destinationLocation ? 'START RIDE NAVIGATION' : 'START ROAD PICKUP METER'}</span>
+              <span>START ROAD PICKUP METER</span>
             </button>
           )}
 

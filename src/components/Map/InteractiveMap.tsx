@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { RoutePoint, LocationItem } from '@/hooks/useTripMeter';
-import { Navigation, Layers, Crosshair, Eye } from 'lucide-react';
+import { Navigation, Layers, Crosshair, Eye, MapPin, X, CheckCircle2, Target, Loader2 } from 'lucide-react';
 import { meterAudio } from '@/utils/audio';
 
-// Custom Smaller TukTuk Vehicle Icon (No round background shape)
+// Custom Smaller TukTuk Vehicle Icon
 const tuktukIcon = L.divIcon({
   className: 'tuktuk-marker-icon-clean',
   html: `
@@ -35,16 +35,29 @@ const destIcon = L.divIcon({
   iconAnchor: [16, 32],
 });
 
-interface MapControllerProps {
-  center: [number, number];
-  zoomLevel?: number;
-}
-
-function MapController({ center, zoomLevel }: MapControllerProps) {
+// Smooth Map Pan Controller (Eliminates Jitter/Shaking)
+function SmoothMapController({ center, zoomLevel }: { center: [number, number], zoomLevel?: number }) {
   const map = useMap();
+  const prevCenterRef = useRef<[number, number]>(center);
+
   useEffect(() => {
-    map.flyTo(center, zoomLevel || map.getZoom(), { duration: 1.2 });
-  }, [center, zoomLevel, map]);
+    const [prevLat, prevLng] = prevCenterRef.current;
+    const [lat, lng] = center;
+    const dist = Math.hypot(lat - prevLat, lng - prevLng);
+
+    // Pan smoothly only if position moved significantly (> 0.00005 deg ~ 5m)
+    if (dist > 0.00005) {
+      map.panTo(center, { animate: true, duration: 0.8 });
+      prevCenterRef.current = center;
+    }
+  }, [center, map]);
+
+  useEffect(() => {
+    if (zoomLevel) {
+      map.setZoom(zoomLevel);
+    }
+  }, [zoomLevel, map]);
+
   return null;
 }
 
@@ -77,6 +90,12 @@ interface InteractiveMapProps {
   destinationLocation: LocationItem | null;
   isPinpointDraggingMode: boolean;
   avoidTolls: boolean;
+  searchResults: LocationItem[];
+  isSearchingPlaces: boolean;
+  onSearchPlaces: (query: string) => void;
+  onSelectDestination: (dest: LocationItem) => void;
+  onClearDestination: () => void;
+  onTogglePinpointMode: () => void;
   onTileStyleChange: (style: 'streets' | 'dark' | 'satellite') => void;
   onToggleTraffic: () => void;
   onToggleTrafficOverlay: () => void;
@@ -92,6 +111,12 @@ export default function InteractiveMap({
   tileStyle,
   destinationLocation,
   isPinpointDraggingMode,
+  searchResults,
+  isSearchingPlaces,
+  onSearchPlaces,
+  onSelectDestination,
+  onClearDestination,
+  onTogglePinpointMode,
   onTileStyleChange,
   onMapCenterChange,
   onConfirmPinpoint,
@@ -99,6 +124,25 @@ export default function InteractiveMap({
   const [targetZoom, setTargetZoom] = useState<number>(15);
   const [showStyleMenu, setShowStyleMenu] = useState<boolean>(false);
   const [showLegend, setShowLegend] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState(destinationLocation ? destinationLocation.name : '');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  useEffect(() => {
+    if (destinationLocation) {
+      setSearchQuery(destinationLocation.name);
+    } else {
+      setSearchQuery('');
+    }
+  }, [destinationLocation]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchQuery.trim().length >= 2) {
+        onSearchPlaces(searchQuery);
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchQuery, onSearchPlaces]);
 
   const getTileUrl = () => {
     switch (tileStyle) {
@@ -116,8 +160,14 @@ export default function InteractiveMap({
   const drivenPolylineCoords: [number, number][] = routePath.map((p) => [p.lat, p.lng]);
 
   const handleCenterAndZoomIn = () => {
-    setTargetZoom(18); // Zoom Level 18 (Level +3 close up view)
+    setTargetZoom(18);
     meterAudio.speak("Map centered close-up.");
+  };
+
+  const handleClearDestination = () => {
+    setSearchQuery('');
+    onClearDestination();
+    setIsSearchOpen(false);
   };
 
   return (
@@ -129,7 +179,7 @@ export default function InteractiveMap({
         zoomControl={false}
         className="w-full h-full z-0"
       >
-        <MapController center={[currentPosition.lat, currentPosition.lng]} zoomLevel={targetZoom} />
+        <SmoothMapController center={[currentPosition.lat, currentPosition.lng]} zoomLevel={targetZoom} />
         <MapCenterListener onCenterChange={onMapCenterChange} isPinpointMode={isPinpointDraggingMode} />
 
         <TileLayer
@@ -162,7 +212,7 @@ export default function InteractiveMap({
           />
         )}
 
-        {/* Smaller TukTuk Vehicle Marker (Clean transparent) */}
+        {/* Smaller TukTuk Vehicle Marker */}
         <Marker position={[currentPosition.lat, currentPosition.lng]} icon={tuktukIcon}>
           <Popup>
             <div className="text-xs font-mono font-bold text-slate-900">
@@ -184,8 +234,75 @@ export default function InteractiveMap({
         )}
       </MapContainer>
 
-      {/* Floating Map Controls Bar */}
-      <div className="absolute top-2 left-2 z-20 flex items-center space-x-1.5">
+      {/* 1. OVERLAY DESTINATION SEARCH BAR & DRAG PIN AT TOP OF MAP AREA */}
+      <div className="absolute top-2 left-2 right-12 z-30 flex items-center space-x-1.5 pointer-events-auto">
+        <div className="flex-1 relative glass-panel rounded-xl border border-cyan-500/40 p-1 shadow-2xl bg-slate-950/90">
+          <div className="flex items-center space-x-1.5 relative">
+            <MapPin className="w-4 h-4 text-rose-400 flex-shrink-0 fill-rose-400 ml-1" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setIsSearchOpen(true);
+              }}
+              onFocus={() => setIsSearchOpen(true)}
+              placeholder="Search place, shop or city in SL..."
+              className="w-full bg-transparent border-0 py-1 pr-6 text-xs font-bold text-white focus:outline-none placeholder-slate-400"
+            />
+            {isSearchingPlaces && <Loader2 className="w-3.5 h-3.5 text-cyan-400 animate-spin absolute right-2" />}
+            {searchQuery && !isSearchingPlaces && (
+              <button
+                onClick={handleClearDestination}
+                className="absolute right-2 text-slate-400 hover:text-white"
+                title="Clear Destination"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Search Dropdown Results */}
+          {isSearchOpen && searchResults.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-1 z-50 glass-panel rounded-xl border border-cyan-500/50 max-h-48 overflow-y-auto shadow-2xl p-1 bg-slate-950">
+              {searchResults.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    onSelectDestination(item);
+                    setSearchQuery(item.name);
+                    setIsSearchOpen(false);
+                  }}
+                  className="w-full text-left p-1.5 hover:bg-cyan-500/20 rounded-lg flex items-center justify-between text-xs transition-colors border-b border-white/5 last:border-0"
+                >
+                  <div className="overflow-hidden mr-1">
+                    <div className="font-bold text-white truncate text-[11px]">{item.name}</div>
+                    <div className="text-[9px] text-slate-400 font-mono truncate">{item.address}</div>
+                  </div>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Drag Pin Button */}
+        <button
+          onClick={onTogglePinpointMode}
+          className={`px-2.5 py-1.5 rounded-xl text-[10px] font-black transition-all border shrink-0 flex items-center space-x-1 shadow-xl ${
+            isPinpointDraggingMode
+              ? 'bg-rose-500 text-white border-rose-400 animate-pulse'
+              : 'glass-panel text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/20'
+          }`}
+          title="Drag Map Center"
+        >
+          <Target className="w-3.5 h-3.5 text-cyan-400" />
+          <span className="hidden sm:inline">{isPinpointDraggingMode ? 'PINNING' : 'DRAG PIN'}</span>
+        </button>
+      </div>
+
+      {/* Floating Map Layers Button */}
+      <div className="absolute bottom-2 left-2 z-20 flex items-center space-x-1.5">
         <button
           onClick={() => setShowStyleMenu(!showStyleMenu)}
           className="p-1.5 glass-panel rounded-xl text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/20 shadow-xl flex items-center space-x-1 text-xs font-bold"
@@ -218,7 +335,7 @@ export default function InteractiveMap({
         )}
       </div>
 
-      {/* Tapping Navigation Arrow Button: Centers Vehicle & Zooms in +3 Levels */}
+      {/* Re-Center Navigation Arrow Button */}
       <div className="absolute top-2 right-2 z-20">
         <button
           onClick={handleCenterAndZoomIn}
@@ -249,7 +366,7 @@ export default function InteractiveMap({
       )}
 
       {/* Traffic Legend Toggle Badge */}
-      <div className="absolute bottom-2 left-2 z-20">
+      <div className="absolute bottom-2 right-2 z-20">
         {!showLegend ? (
           <button
             onClick={() => setShowLegend(true)}

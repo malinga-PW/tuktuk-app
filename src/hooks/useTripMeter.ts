@@ -33,6 +33,16 @@ export interface LocationItem {
   lng: number;
 }
 
+export interface SavedTripRecord {
+  id: string;
+  date: string;
+  time: string;
+  distanceKm: number;
+  durationSec: number;
+  totalFare: number;
+  currency: string;
+}
+
 export const INITIAL_REAL_GPS_PICKUP: LocationItem = {
   id: 'pickup-gps-auto',
   name: 'Current GPS Location',
@@ -60,6 +70,9 @@ export function useTripMeter() {
   const [currentSpeed, setCurrentSpeed] = useState<number>(0);
   const [isAudioMuted, setIsAudioMuted] = useState<boolean>(false);
   const [isHudMirrored, setIsHudMirrored] = useState<boolean>(false);
+
+  // Saved Trip History State
+  const [tripHistory, setTripHistory] = useState<SavedTripRecord[]>([]);
 
   // Real Mobile GPS state
   const [useRealGps, setUseRealGps] = useState<boolean>(true);
@@ -111,8 +124,22 @@ export function useTripMeter() {
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Screen Wake Lock API
-  const requestWakeLock = async () => {
+  // Load Trip History from localStorage on initial mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('tuktuk_trip_history');
+        if (stored) {
+          setTripHistory(JSON.parse(stored));
+        }
+      } catch {
+        // Ignore localStorage error
+      }
+    }
+  }, []);
+
+  // Screen Wake Lock API Auto-Rebind
+  const requestWakeLock = useCallback(async () => {
     try {
       if (typeof window !== 'undefined' && 'wakeLock' in navigator) {
         wakeLockRef.current = await (navigator as unknown as { wakeLock: { request: (type: string) => Promise<unknown> } }).wakeLock.request('screen');
@@ -120,11 +147,21 @@ export function useTripMeter() {
     } catch {
       // Ignore
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    requestWakeLock();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        requestWakeLock();
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => window.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [requestWakeLock]);
 
   // Auto-Detect Real Mobile GPS Location on App Load
   useEffect(() => {
-    requestWakeLock();
     if (typeof window !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
@@ -227,7 +264,6 @@ export function useTripMeter() {
               if (deltaKm > 0.005) {
                 setDistanceKm((d) => {
                   const newDist = d + deltaKm;
-                  // Voice announcement per 1.0 km
                   const currentKmFloor = Math.floor(newDist);
                   if (currentKmFloor > lastAnnouncedKmRef.current && currentKmFloor >= 1) {
                     lastAnnouncedKmRef.current = currentKmFloor;
@@ -259,7 +295,7 @@ export function useTripMeter() {
     };
   }, [useRealGps, status]);
 
-  // Nominatim Search
+  // Enhanced Place Search (Nominatim + Photon API Fallback for All Businesses/Shops in SL)
   const searchPlaces = useCallback(async (query: string) => {
     if (!query || query.trim().length < 2) {
       setSearchResults([]);
@@ -268,27 +304,55 @@ export function useTripMeter() {
 
     setIsSearchingPlaces(true);
     try {
+      // 1. Try Nominatim Sri Lanka
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=lk&limit=7`
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=lk&limit=8`
       );
       if (res.ok) {
         const data = await res.json();
-        const formatted: LocationItem[] = data.map((item: { place_id: number, display_name: string, lat: string, lon: string }, idx: number) => {
-          const parts = item.display_name.split(',');
-          const mainName = parts[0] || query;
-          const fullAddress = parts.slice(1).join(',').trim();
-          return {
-            id: `nom-${item.place_id || idx}`,
-            name: mainName,
-            address: fullAddress || item.display_name,
-            lat: parseFloat(item.lat),
-            lng: parseFloat(item.lon),
-          };
-        });
-        setSearchResults(formatted);
+        if (data && data.length > 0) {
+          const formatted: LocationItem[] = data.map((item: { place_id: number, display_name: string, lat: string, lon: string }, idx: number) => {
+            const parts = item.display_name.split(',');
+            const mainName = parts[0] || query;
+            const fullAddress = parts.slice(1).join(',').trim();
+            return {
+              id: `nom-${item.place_id || idx}`,
+              name: mainName,
+              address: fullAddress || item.display_name,
+              lat: parseFloat(item.lat),
+              lng: parseFloat(item.lon),
+            };
+          });
+          setSearchResults(formatted);
+          setIsSearchingPlaces(false);
+          return;
+        }
+      }
+
+      // 2. Fallback to Photon API for business & shop names
+      const photonRes = await fetch(
+        `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=8`
+      );
+      if (photonRes.ok) {
+        const photonData = await photonRes.json();
+        if (photonData.features && photonData.features.length > 0) {
+          const formatted: LocationItem[] = photonData.features.map((feat: { properties: { name?: string, city?: string, street?: string, country?: string }, geometry: { coordinates: [number, number] } }, idx: number) => {
+            const p = feat.properties;
+            const name = p.name || query;
+            const address = [p.street, p.city, p.country].filter(Boolean).join(', ');
+            return {
+              id: `phot-${idx}`,
+              name: name,
+              address: address || name,
+              lat: feat.geometry.coordinates[1],
+              lng: feat.geometry.coordinates[0],
+            };
+          });
+          setSearchResults(formatted);
+        }
       }
     } catch {
-      // Ignore
+      // Ignore search error
     } finally {
       setIsSearchingPlaces(false);
     }
@@ -346,6 +410,34 @@ export function useTripMeter() {
     meterAudio.playStopChime();
     const finalFare = calculateFare();
     meterAudio.speak(`Trip completed. Total fare ${tariff.currency} ${finalFare}`);
+
+    // Save trip to History in localStorage
+    const newRecord: SavedTripRecord = {
+      id: `trip-${Date.now()}`,
+      date: new Date().toLocaleDateString('en-GB'),
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      distanceKm: distanceKm,
+      durationSec: elapsedSeconds,
+      totalFare: finalFare,
+      currency: tariff.currency,
+    };
+
+    setTripHistory((prev) => {
+      const updated = [newRecord, ...prev];
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('tuktuk_trip_history', JSON.stringify(updated));
+        } catch {}
+      }
+      return updated;
+    });
+  };
+
+  const clearHistory = () => {
+    setTripHistory([]);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('tuktuk_trip_history');
+    }
   };
 
   const resetTrip = () => {
@@ -389,7 +481,7 @@ export function useTripMeter() {
     meterAudio.speak("Destination pinned.");
   };
 
-  // Main Continuous Timer Loop for Total Time and Wait Time
+  // Main Continuous Timer Loop
   useEffect(() => {
     if (status !== 'RUNNING' && status !== 'PAUSED') {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -397,15 +489,12 @@ export function useTripMeter() {
     }
 
     timerRef.current = setInterval(() => {
-      // 1. Always increment elapsed total time while RUNNING or PAUSED
       setElapsedSeconds((prev) => prev + 1);
 
-      // 2. Increment waiting time if PAUSED or speed is zero/simulating traffic
       if (status === 'PAUSED' || currentSpeed === 0 || isSimulatingTraffic) {
         setWaitingSeconds((prev) => prev + 1);
       }
 
-      // 3. Simulation mode movement (when real GPS is OFF)
       if (status === 'RUNNING' && !useRealGps) {
         if (!isSimulatingTraffic) {
           const simSpeed = Math.floor(25 + Math.random() * 20);
@@ -477,6 +566,8 @@ export function useTripMeter() {
     gpsError,
     searchResults,
     isSearchingPlaces,
+    tripHistory,
+    clearHistory,
     searchPlaces,
     clearAllTripData,
     setUseRealGps,
