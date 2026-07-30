@@ -367,7 +367,7 @@ export function useTripMeter() {
     };
   }, [useRealGps, status, vehicleHeading]);
 
-  // Enhanced Search
+  // Multi-Engine Business Search (Combines Nominatim, Photon, and OpenStreetMap Business POIs in Sri Lanka)
   const searchPlaces = useCallback(async (query: string) => {
     if (!query || query.trim().length < 2) {
       setSearchResults([]);
@@ -375,52 +375,64 @@ export function useTripMeter() {
     }
 
     setIsSearchingPlaces(true);
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=lk&viewbox=79.5,9.8,81.9,5.9&bounded=1&limit=10`
-      );
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.length > 0) {
-          const formatted: LocationItem[] = data.map((item: { place_id: number, display_name: string, lat: string, lon: string }, idx: number) => {
-            const parts = item.display_name.split(',');
-            const mainName = parts[0] || query;
-            const fullAddress = parts.slice(1).join(',').trim();
-            return {
-              id: `nom-${item.place_id || idx}`,
-              name: mainName,
-              address: fullAddress || item.display_name,
-              lat: parseFloat(item.lat),
-              lng: parseFloat(item.lon),
-            };
-          });
-          setSearchResults(formatted);
-          setIsSearchingPlaces(false);
-          return;
-        }
-      }
+    const resultsMap = new Map<string, LocationItem>();
 
-      const photonRes = await fetch(
-        `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&bbox=79.5,5.9,81.9,9.8&limit=10`
-      );
-      if (photonRes.ok) {
-        const photonData = await photonRes.json();
-        if (photonData.features && photonData.features.length > 0) {
-          const formatted: LocationItem[] = photonData.features.map((feat: { properties: { name?: string, city?: string, street?: string, country?: string }, geometry: { coordinates: [number, number] } }, idx: number) => {
-            const p = feat.properties;
-            const name = p.name || query;
-            const address = [p.street, p.city, p.country].filter(Boolean).join(', ');
-            return {
-              id: `phot-${idx}`,
-              name: name,
-              address: address || name,
-              lat: feat.geometry.coordinates[1],
-              lng: feat.geometry.coordinates[0],
-            };
-          });
-          setSearchResults(formatted);
+    try {
+      // Engine 1: Photon Komoot (Fast Business & Shop Index in Sri Lanka)
+      const photonPromise = fetch(
+        `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&bbox=79.5,5.9,81.9,9.8&limit=8`
+      ).then(async (res) => {
+        if (res.ok) {
+          const data = await res.json();
+          if (data.features) {
+            data.features.forEach((feat: { properties: { name?: string, city?: string, street?: string, country?: string }, geometry: { coordinates: [number, number] } }, idx: number) => {
+              const p = feat.properties;
+              if (p.name) {
+                const address = [p.street, p.city, p.country].filter(Boolean).join(', ');
+                const key = `${p.name.toLowerCase()}-${feat.geometry.coordinates[1].toFixed(3)}`;
+                resultsMap.set(key, {
+                  id: `phot-${idx}-${Date.now()}`,
+                  name: p.name,
+                  address: address || p.name,
+                  lat: feat.geometry.coordinates[1],
+                  lng: feat.geometry.coordinates[0],
+                });
+              }
+            });
+          }
         }
-      }
+      }).catch(() => {});
+
+      // Engine 2: OpenStreetMap Nominatim Sri Lanka
+      const nominatimPromise = fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query + ' Sri Lanka')}&countrycodes=lk&limit=8`
+      ).then(async (res) => {
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            data.forEach((item: { place_id: number, display_name: string, lat: string, lon: string }, idx: number) => {
+              const parts = item.display_name.split(',');
+              const mainName = parts[0] || query;
+              const fullAddress = parts.slice(1).join(',').trim();
+              const key = `${mainName.toLowerCase()}-${parseFloat(item.lat).toFixed(3)}`;
+              if (!resultsMap.has(key)) {
+                resultsMap.set(key, {
+                  id: `nom-${item.place_id || idx}`,
+                  name: mainName,
+                  address: fullAddress || item.display_name,
+                  lat: parseFloat(item.lat),
+                  lng: parseFloat(item.lon),
+                });
+              }
+            });
+          }
+        }
+      }).catch(() => {});
+
+      await Promise.all([photonPromise, nominatimPromise]);
+
+      const mergedList = Array.from(resultsMap.values());
+      setSearchResults(mergedList);
     } catch {
       // Ignore
     } finally {
