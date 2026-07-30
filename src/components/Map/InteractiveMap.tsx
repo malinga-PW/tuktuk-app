@@ -110,7 +110,33 @@ function RecenterController({ center, trigger }: { center: [number, number], tri
   return null;
 }
 
-// Leaflet Map Reference Capture & Pin Handler
+// Map Rotation Controller — rotates map to heading-up (like Google Maps navigation)
+// Only active during RUNNING trips; smoothly transitions back to north-up when stopped.
+function MapRotationController({ heading, status }: { heading: number; status: TripStatus }) {
+  const map = useMap();
+  const prevHeadingRef = useRef<number>(0);
+
+  useEffect(() => {
+    const panes = map.getContainer();
+    const mapPane = panes.querySelector('.leaflet-map-pane') as HTMLElement | null;
+    if (!mapPane) return;
+
+    const isActive = status === 'RUNNING';
+    const targetRotation = isActive ? -heading : 0;
+
+    // Only update if heading changed meaningfully (> 0.5°)
+    if (Math.abs(targetRotation - prevHeadingRef.current) < 0.5 && isActive) return;
+    prevHeadingRef.current = targetRotation;
+
+    mapPane.style.transition = 'transform 0.5s ease-out';
+    mapPane.style.transformOrigin = '50% 50%';
+    mapPane.style.transform = `rotate(${targetRotation}deg)`;
+  }, [heading, status, map]);
+
+  return null;
+}
+
+// Map Reference Capture & Pin Handler
 function MapPinHandler() {
   const map = useMap();
   
@@ -243,6 +269,7 @@ export default function InteractiveMap({
         <SmoothMapController center={[currentPosition.lat, currentPosition.lng]} />
         <RecenterController center={[currentPosition.lat, currentPosition.lng]} trigger={recenterTrigger} />
         <RouteFitBoundsController pickup={currentPosition} destination={destinationLocation} status={status} zoomLevel={15} />
+        <MapRotationController heading={vehicleHeading} status={status} />
         <MapPinHandler />
 
         <TileLayer
@@ -275,10 +302,10 @@ export default function InteractiveMap({
           />
         )}
 
-        {/* Rotating Vehicle Navigation Arrow Marker */}
+        {/* Rotating Vehicle Navigation Arrow — counter-rotates when map rotates to stay upright */}
         <Marker
           position={[currentPosition.lat, currentPosition.lng]}
-          icon={createNavigationArrowIcon(currentHeadingAngle)}
+          icon={createNavigationArrowIcon(status === 'RUNNING' ? 0 : currentHeadingAngle)}
         >
           <Popup>
             <div className="text-xs font-mono font-bold text-slate-900">
