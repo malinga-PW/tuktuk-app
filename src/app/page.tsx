@@ -26,11 +26,15 @@ export default function Home() {
     elapsedSeconds,
     waitingSeconds,
     currentSpeed,
+    vehicleHeading,
     currentPosition,
     routePath,
     fullNavPath,
     tariff,
     totalFare,
+    estimatedDistanceKm,
+    estimatedDurationMins,
+    estimatedFare,
     isAudioMuted,
     isHudMirrored,
     mapTileStyle,
@@ -80,6 +84,7 @@ export default function Home() {
           routePath={routePath}
           fullNavPath={fullNavPath}
           currentSpeed={currentSpeed}
+          vehicleHeading={vehicleHeading}
           tileStyle={mapTileStyle}
           isSimulatingTraffic={isSimulatingTraffic}
           showTrafficOverlay={showTrafficOverlay}
@@ -151,6 +156,9 @@ export default function Home() {
         waitingSeconds={waitingSeconds}
         totalFare={totalFare}
         tariff={tariff}
+        estimatedDistanceKm={estimatedDistanceKm}
+        estimatedDurationMins={estimatedDurationMins}
+        estimatedFare={estimatedFare}
         onClose={() => setIsReceiptModalOpen(false)}
       />
 

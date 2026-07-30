@@ -7,19 +7,24 @@ import { RoutePoint, LocationItem } from '@/hooks/useTripMeter';
 import { Navigation, Layers, Crosshair, Eye, MapPin, X, CheckCircle2, Target, Loader2 } from 'lucide-react';
 import { meterAudio } from '@/utils/audio';
 
-// Custom Smaller TukTuk Vehicle Icon
-const tuktukIcon = L.divIcon({
-  className: 'tuktuk-marker-icon-clean',
-  html: `
-    <div class="relative flex items-center justify-center">
-      <div class="w-7 h-7 text-2xl filter drop-shadow-md animate-pulse">
-        🛺
+// Custom Rotating Vehicle Navigation Arrow Icon (Heading Direction)
+const createNavigationArrowIcon = (headingDeg: number = 0) => {
+  return L.divIcon({
+    className: 'vehicle-nav-arrow-icon',
+    html: `
+      <div style="transform: rotate(${headingDeg}deg); transition: transform 0.4s ease-out;" class="relative flex items-center justify-center">
+        <div class="w-8 h-8 rounded-full bg-cyan-500/30 border border-cyan-400/50 absolute animate-ping"></div>
+        <div class="w-8 h-8 rounded-full bg-slate-950 border-2 border-cyan-400 shadow-2xl flex items-center justify-center z-10">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="#00f2fe" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2L4.5 20.29L5.21 21L12 18L18.79 21L19.5 20.29L12 2Z" fill="#00f2fe" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
+        </div>
       </div>
-    </div>
-  `,
-  iconSize: [28, 28],
-  iconAnchor: [14, 14],
-});
+    `,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+  });
+};
 
 // Destination Pin Icon
 const destIcon = L.divIcon({
@@ -45,7 +50,6 @@ function SmoothMapController({ center, zoomLevel }: { center: [number, number], 
     const [lat, lng] = center;
     const dist = Math.hypot(lat - prevLat, lng - prevLng);
 
-    // Pan smoothly only if position moved significantly (> 0.00005 deg ~ 5m)
     if (dist > 0.00005) {
       map.panTo(center, { animate: true, duration: 0.8 });
       prevCenterRef.current = center;
@@ -83,6 +87,7 @@ interface InteractiveMapProps {
   routePath: RoutePoint[];
   fullNavPath: RoutePoint[];
   currentSpeed: number;
+  vehicleHeading?: number;
   tileStyle: 'streets' | 'dark' | 'satellite';
   isSimulatingTraffic: boolean;
   showTrafficOverlay: boolean;
@@ -108,6 +113,7 @@ export default function InteractiveMap({
   routePath,
   fullNavPath,
   currentSpeed,
+  vehicleHeading = 0,
   tileStyle,
   destinationLocation,
   isPinpointDraggingMode,
@@ -170,6 +176,8 @@ export default function InteractiveMap({
     setIsSearchOpen(false);
   };
 
+  const currentHeadingAngle = currentPosition.heading !== undefined ? currentPosition.heading : vehicleHeading;
+
   return (
     <div className="w-full h-full relative overflow-hidden bg-slate-950">
       {/* Edge-to-edge 1:1 Leaflet Map */}
@@ -212,11 +220,14 @@ export default function InteractiveMap({
           />
         )}
 
-        {/* Smaller TukTuk Vehicle Marker */}
-        <Marker position={[currentPosition.lat, currentPosition.lng]} icon={tuktukIcon}>
+        {/* Rotating Vehicle Navigation Arrow Marker */}
+        <Marker
+          position={[currentPosition.lat, currentPosition.lng]}
+          icon={createNavigationArrowIcon(currentHeadingAngle)}
+        >
           <Popup>
             <div className="text-xs font-mono font-bold text-slate-900">
-              🛺 TukTuk Live Location<br />
+              Navigation Arrow (Heading: {Math.round(currentHeadingAngle)}°)<br />
               Speed: {currentSpeed} KM/H
             </div>
           </Popup>
@@ -234,7 +245,7 @@ export default function InteractiveMap({
         )}
       </MapContainer>
 
-      {/* 1. OVERLAY DESTINATION SEARCH BAR & DRAG PIN AT TOP OF MAP AREA */}
+      {/* OVERLAY DESTINATION SEARCH BAR & DRAG PIN AT TOP OF MAP AREA */}
       <div className="absolute top-2 left-2 right-12 z-30 flex items-center space-x-1.5 pointer-events-auto">
         <div className="flex-1 relative glass-panel rounded-xl border border-cyan-500/40 p-1 shadow-2xl bg-slate-950/90">
           <div className="flex items-center space-x-1.5 relative">
@@ -247,7 +258,7 @@ export default function InteractiveMap({
                 setIsSearchOpen(true);
               }}
               onFocus={() => setIsSearchOpen(true)}
-              placeholder="Search place, shop or city in SL..."
+              placeholder="Search place in Sri Lanka..."
               className="w-full bg-transparent border-0 py-1 pr-6 text-xs font-bold text-white focus:outline-none placeholder-slate-400"
             />
             {isSearchingPlaces && <Loader2 className="w-3.5 h-3.5 text-cyan-400 animate-spin absolute right-2" />}

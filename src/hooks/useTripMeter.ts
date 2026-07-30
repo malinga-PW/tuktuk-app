@@ -20,6 +20,7 @@ export interface TariffConfig {
 export interface RoutePoint {
   lat: number;
   lng: number;
+  heading?: number;
   streetName?: string;
   isOneWay?: boolean;
   trafficStatus?: 'clear' | 'moderate' | 'heavy';
@@ -62,14 +63,29 @@ export function getHaversineDistance(lat1: number, lon1: number, lat2: number, l
   return R * c;
 }
 
+export function getBearing(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const y = Math.sin((lon2 - lon1) * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180));
+  const x =
+    Math.cos(lat1 * (Math.PI / 180)) * Math.sin(lat2 * (Math.PI / 180)) -
+    Math.sin(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.cos((lon2 - lon1) * (Math.PI / 180));
+  const brng = (Math.atan2(y, x) * 180) / Math.PI;
+  return (brng + 360) % 360;
+}
+
 export function useTripMeter() {
   const [status, setStatus] = useState<TripStatus>('IDLE');
   const [distanceKm, setDistanceKm] = useState<number>(0);
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
   const [waitingSeconds, setWaitingSeconds] = useState<number>(0);
   const [currentSpeed, setCurrentSpeed] = useState<number>(0);
+  const [vehicleHeading, setVehicleHeading] = useState<number>(0);
   const [isAudioMuted, setIsAudioMuted] = useState<boolean>(false);
   const [isHudMirrored, setIsHudMirrored] = useState<boolean>(false);
+
+  // Estimates state
+  const [estimatedDistanceKm, setEstimatedDistanceKm] = useState<number>(0);
+  const [estimatedDurationMins, setEstimatedDurationMins] = useState<number>(0);
+  const [estimatedFare, setEstimatedFare] = useState<number>(0);
 
   // Saved Trip History State
   const [tripHistory, setTripHistory] = useState<SavedTripRecord[]>([]);
@@ -80,6 +96,7 @@ export function useTripMeter() {
   const watchIdRef = useRef<number | null>(null);
   const wakeLockRef = useRef<unknown | null>(null);
   const lastAnnouncedKmRef = useRef<number>(0);
+  const prevCoordsRef = useRef<{ lat: number, lng: number } | null>(null);
 
   // Locations state
   const [pickupLocation, setPickupLocation] = useState<LocationItem>(INITIAL_REAL_GPS_PICKUP);
@@ -93,10 +110,10 @@ export function useTripMeter() {
 
   // Navigation route path state
   const [fullNavPath, setFullNavPath] = useState<RoutePoint[]>([
-    { lat: INITIAL_REAL_GPS_PICKUP.lat, lng: INITIAL_REAL_GPS_PICKUP.lng, streetName: INITIAL_REAL_GPS_PICKUP.name },
+    { lat: INITIAL_REAL_GPS_PICKUP.lat, lng: INITIAL_REAL_GPS_PICKUP.lng, heading: 0, streetName: INITIAL_REAL_GPS_PICKUP.name },
   ]);
   const [routeIndex, setRouteIndex] = useState<number>(0);
-  const [routePath, setRoutePath] = useState<RoutePoint[]>([INITIAL_REAL_GPS_PICKUP]);
+  const [routePath, setRoutePath] = useState<RoutePoint[]>([{ lat: INITIAL_REAL_GPS_PICKUP.lat, lng: INITIAL_REAL_GPS_PICKUP.lng, heading: 0 }]);
 
   // Map tile style
   const [mapTileStyle, setMapTileStyle] = useState<'streets' | 'dark' | 'satellite'>('streets');
@@ -124,7 +141,7 @@ export function useTripMeter() {
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load Trip History from localStorage on initial mount
+  // Load Trip History from localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -133,7 +150,7 @@ export function useTripMeter() {
           setTripHistory(JSON.parse(stored));
         }
       } catch {
-        // Ignore localStorage error
+        // Ignore
       }
     }
   }, []);
@@ -160,12 +177,12 @@ export function useTripMeter() {
     return () => window.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [requestWakeLock]);
 
-  // Auto-Detect Real Mobile GPS Location on App Load
+  // Robust Geolocation Handler
   useEffect(() => {
     if (typeof window !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          const { latitude, longitude } = pos.coords;
+          const { latitude, longitude, heading } = pos.coords;
           const realPickup: LocationItem = {
             id: 'real-pickup-initial',
             name: 'Current Location (Real GPS)',
@@ -175,53 +192,86 @@ export function useTripMeter() {
           };
           setPickupLocation(realPickup);
           setMapCenterCoords({ lat: latitude, lng: longitude });
-          setRoutePath([{ lat: latitude, lng: longitude, streetName: 'Current Location' }]);
+          if (heading !== null && heading !== undefined && !isNaN(heading)) {
+            setVehicleHeading(heading);
+          }
+          setRoutePath([{ lat: latitude, lng: longitude, heading: heading || 0, streetName: 'Current Location' }]);
+          prevCoordsRef.current = { lat: latitude, lng: longitude };
         },
         () => {},
-        { enableHighAccuracy: true, timeout: 10000 }
+        { enableHighAccuracy: false, timeout: 30000, maximumAge: 10000 }
       );
     }
   }, []);
 
-  // OSRM Real-Road Routing Engine
+  // Calculate estimated fare helper
+  const calcEstimatedFare = useCallback((distKm: number, tariffCfg: TariffConfig) => {
+    let total = tariffCfg.baseFare;
+    if (distKm > tariffCfg.baseKmIncluded) {
+      total += (distKm - tariffCfg.baseKmIncluded) * tariffCfg.ratePerKm;
+    }
+    return Math.round(total);
+  }, []);
+
+  // OSRM Real-Road Routing Engine & Estimates Calculation
   const fetchOsrmRoute = useCallback(async (start: { lat: number, lng: number }, end: { lat: number, lng: number }) => {
     try {
       const url = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`;
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
-        if (data.routes && data.routes[0] && data.routes[0].geometry) {
-          const coords = data.routes[0].geometry.coordinates;
-          const osrmPoints: RoutePoint[] = coords.map((c: [number, number], idx: number) => ({
-            lat: c[1],
-            lng: c[0],
-            streetName: "Colombo Street Route",
-            trafficStatus: idx % 10 === 0 ? 'moderate' : idx % 23 === 0 ? 'heavy' : 'clear',
-            isOneWay: idx % 15 === 0,
-          }));
-          setFullNavPath(osrmPoints);
-          setRouteIndex(0);
-          setRoutePath([osrmPoints[0]]);
-          return;
+        if (data.routes && data.routes[0]) {
+          const route = data.routes[0];
+          const distKm = route.distance / 1000;
+          const durMins = Math.round(route.duration / 60);
+          setEstimatedDistanceKm(distKm);
+          setEstimatedDurationMins(durMins);
+          setEstimatedFare(calcEstimatedFare(distKm, tariff));
+
+          if (route.geometry && route.geometry.coordinates) {
+            const coords = route.geometry.coordinates;
+            const osrmPoints: RoutePoint[] = coords.map((c: [number, number], idx: number) => {
+              const nextC = coords[idx + 1] || c;
+              const h = getBearing(c[1], c[0], nextC[1], nextC[0]);
+              return {
+                lat: c[1],
+                lng: c[0],
+                heading: h,
+                streetName: "Colombo Street Route",
+              };
+            });
+            setFullNavPath(osrmPoints);
+            setRouteIndex(0);
+            setRoutePath([osrmPoints[0]]);
+            return;
+          }
         }
       }
     } catch {
       // Fallback
     }
 
+    const fallbackDist = getHaversineDistance(start.lat, start.lng, end.lat, end.lng);
+    setEstimatedDistanceKm(fallbackDist);
+    setEstimatedDurationMins(Math.round((fallbackDist / 25) * 60));
+    setEstimatedFare(calcEstimatedFare(fallbackDist, tariff));
+
     setFullNavPath([
-      { lat: start.lat, lng: start.lng },
-      { lat: end.lat, lng: end.lng },
+      { lat: start.lat, lng: start.lng, heading: 0 },
+      { lat: end.lat, lng: end.lng, heading: 0 },
     ]);
-  }, []);
+  }, [tariff, calcEstimatedFare]);
 
   useEffect(() => {
     if (destinationLocation) {
       fetchOsrmRoute(pickupLocation, destinationLocation);
     } else {
-      setFullNavPath([{ lat: pickupLocation.lat, lng: pickupLocation.lng, streetName: pickupLocation.name }]);
+      setEstimatedDistanceKm(0);
+      setEstimatedDurationMins(0);
+      setEstimatedFare(0);
+      setFullNavPath([{ lat: pickupLocation.lat, lng: pickupLocation.lng, heading: vehicleHeading, streetName: pickupLocation.name }]);
     }
-  }, [pickupLocation, destinationLocation, avoidTolls, fetchOsrmRoute]);
+  }, [pickupLocation, destinationLocation, avoidTolls, fetchOsrmRoute, vehicleHeading]);
 
   // Real Mobile GPS Tracking Handler
   useEffect(() => {
@@ -242,9 +292,27 @@ export function useTripMeter() {
     setGpsError(null);
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
-        const { latitude, longitude, speed } = pos.coords;
+        const { latitude, longitude, speed, heading } = pos.coords;
         const speedKmH = speed ? Math.round(speed * 3.6) : 0;
         setCurrentSpeed(speedKmH);
+
+        let currentHeading = vehicleHeading;
+        if (heading !== null && heading !== undefined && !isNaN(heading) && speedKmH > 2) {
+          currentHeading = heading;
+        } else if (prevCoordsRef.current) {
+          const calculatedBearing = getBearing(
+            prevCoordsRef.current.lat,
+            prevCoordsRef.current.lng,
+            latitude,
+            longitude
+          );
+          const delta = getHaversineDistance(prevCoordsRef.current.lat, prevCoordsRef.current.lng, latitude, longitude);
+          if (delta > 0.003) {
+            currentHeading = calculatedBearing;
+          }
+        }
+        setVehicleHeading(currentHeading);
+        prevCoordsRef.current = { lat: latitude, lng: longitude };
 
         const newPoint: LocationItem = {
           id: 'real-gps',
@@ -261,7 +329,7 @@ export function useTripMeter() {
             const lastPt = prev[prev.length - 1];
             if (lastPt) {
               const deltaKm = getHaversineDistance(lastPt.lat, lastPt.lng, latitude, longitude);
-              if (deltaKm > 0.005) {
+              if (deltaKm > 0.003) {
                 setDistanceKm((d) => {
                   const newDist = d + deltaKm;
                   const currentKmFloor = Math.floor(newDist);
@@ -274,17 +342,21 @@ export function useTripMeter() {
                 meterAudio.playTick();
               }
             }
-            return [...prev, { lat: latitude, lng: longitude, streetName: "Live GPS Road" }];
+            return [...prev, { lat: latitude, lng: longitude, heading: currentHeading, streetName: "Live GPS Road" }];
           });
         }
       },
       (err) => {
-        setGpsError(err.message || "Failed to access mobile GPS.");
+        if (err.code === 3) {
+          setGpsError("GPS Signal Weak (Awaiting Satellite Lock...)");
+        } else {
+          setGpsError(err.message || "Failed to access mobile GPS.");
+        }
       },
       {
         enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 1000,
+        timeout: 30000,
+        maximumAge: 5000,
       }
     );
 
@@ -293,9 +365,9 @@ export function useTripMeter() {
         navigator.geolocation.clearWatch(watchIdRef.current);
       }
     };
-  }, [useRealGps, status]);
+  }, [useRealGps, status, vehicleHeading]);
 
-  // Enhanced Place Search (Nominatim + Photon API Fallback for All Businesses/Shops in SL)
+  // Enhanced Search
   const searchPlaces = useCallback(async (query: string) => {
     if (!query || query.trim().length < 2) {
       setSearchResults([]);
@@ -304,9 +376,8 @@ export function useTripMeter() {
 
     setIsSearchingPlaces(true);
     try {
-      // 1. Try Nominatim Sri Lanka
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=lk&limit=8`
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=lk&viewbox=79.5,9.8,81.9,5.9&bounded=1&limit=10`
       );
       if (res.ok) {
         const data = await res.json();
@@ -329,9 +400,8 @@ export function useTripMeter() {
         }
       }
 
-      // 2. Fallback to Photon API for business & shop names
       const photonRes = await fetch(
-        `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=8`
+        `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&bbox=79.5,5.9,81.9,9.8&limit=10`
       );
       if (photonRes.ok) {
         const photonData = await photonRes.json();
@@ -352,7 +422,7 @@ export function useTripMeter() {
         }
       }
     } catch {
-      // Ignore search error
+      // Ignore
     } finally {
       setIsSearchingPlaces(false);
     }
@@ -411,7 +481,6 @@ export function useTripMeter() {
     const finalFare = calculateFare();
     meterAudio.speak(`Trip completed. Total fare ${tariff.currency} ${finalFare}`);
 
-    // Save trip to History in localStorage
     const newRecord: SavedTripRecord = {
       id: `trip-${Date.now()}`,
       date: new Date().toLocaleDateString('en-GB'),
@@ -458,8 +527,11 @@ export function useTripMeter() {
     setWaitingSeconds(0);
     setCurrentSpeed(0);
     setDestinationLocation(null);
+    setEstimatedDistanceKm(0);
+    setEstimatedDurationMins(0);
+    setEstimatedFare(0);
     setFullNavPath([
-      { lat: pickupLocation.lat, lng: pickupLocation.lng },
+      { lat: pickupLocation.lat, lng: pickupLocation.lng, heading: vehicleHeading },
     ]);
     setRouteIndex(0);
     lastAnnouncedKmRef.current = 0;
@@ -481,7 +553,7 @@ export function useTripMeter() {
     meterAudio.speak("Destination pinned.");
   };
 
-  // Main Continuous Timer Loop
+  // Simulation Loop
   useEffect(() => {
     if (status !== 'RUNNING' && status !== 'PAUSED') {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -525,6 +597,9 @@ export function useTripMeter() {
                 return prevIdx;
               }
               const newPoint = fullNavPath[nextIdx];
+              if (newPoint.heading !== undefined) {
+                setVehicleHeading(newPoint.heading);
+              }
               setRoutePath((prevPath) => [...prevPath, newPoint]);
               return nextIdx;
             });
@@ -546,11 +621,15 @@ export function useTripMeter() {
     elapsedSeconds,
     waitingSeconds,
     currentSpeed,
+    vehicleHeading,
     currentPosition,
     routePath,
     fullNavPath,
     tariff,
     totalFare: calculateFare(),
+    estimatedDistanceKm,
+    estimatedDurationMins,
+    estimatedFare,
     isAudioMuted,
     isHudMirrored,
     mapTileStyle,

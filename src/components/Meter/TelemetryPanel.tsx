@@ -46,6 +46,7 @@ export default function TelemetryPanel({
   tariff,
   isAudioMuted,
   isHudMirrored,
+  destinationLocation,
   useRealGps,
   gpsError,
   onClearAll,
@@ -96,26 +97,12 @@ export default function TelemetryPanel({
 
   return (
     <div className={`w-full h-full flex flex-col justify-between p-2 glass-panel rounded-2xl border border-white/10 ${isHudMirrored ? 'hud-mirror' : ''}`}>
-      {/* 1. Top Title Header Bar (Status, GPS, History, Fullscreen, Reset, Rate Adjust, Settings, Audio) */}
+      {/* 1. Sleek Clean Top Header Bar */}
       <div className="flex items-center justify-between pb-1 border-b border-white/10 shrink-0">
-        <div className="flex items-center space-x-1">
-          <div className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider flex items-center space-x-1 ${
-            status === 'RUNNING' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 animate-pulse' :
-            status === 'PAUSED' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' :
-            status === 'FINISHED' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40' :
-            'bg-slate-800 text-slate-400 border border-slate-700'
-          }`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${
-              status === 'RUNNING' ? 'bg-emerald-400' :
-              status === 'PAUSED' ? 'bg-amber-400' :
-              status === 'FINISHED' ? 'bg-cyan-400' : 'bg-slate-500'
-            }`}></span>
-            <span>{status === 'IDLE' ? 'ROAD PICKUP READY' : status}</span>
-          </div>
-
+        <div className="flex items-center space-x-1.5">
           <button
             onClick={onToggleRealGps}
-            className={`px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase flex items-center space-x-0.5 transition-all border ${
+            className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase flex items-center space-x-1 transition-all border ${
               useRealGps
                 ? 'bg-emerald-500/30 text-emerald-300 border-emerald-500/50 shadow-md shadow-emerald-500/20 animate-pulse'
                 : 'glass-pill text-slate-400 border-white/10'
@@ -123,7 +110,7 @@ export default function TelemetryPanel({
             title="Toggle Phone Hardware GPS"
           >
             <Radio className={`w-2.5 h-2.5 ${useRealGps ? 'text-emerald-400' : 'text-slate-500'}`} />
-            <span>{useRealGps ? 'REAL GPS' : 'SIM GPS'}</span>
+            <span>{useRealGps ? '📡 REAL GPS ACTIVE' : '📱 SIM GPS'}</span>
           </button>
         </div>
 
@@ -226,9 +213,9 @@ export default function TelemetryPanel({
         </div>
       )}
 
-      {/* 2. HERO LAYOUT: Extra Large Passenger Readouts for Total Fare & Distance */}
+      {/* 2. HERO LAYOUT: Extra Large Passenger Readouts */}
       <div className="my-1 grid grid-cols-12 gap-1.5 items-stretch flex-1">
-        {/* Left Hero Box (7 Cols): TOTAL FARE + DISTANCE KM (EXTRA LARGE PASSENGER READOUT) */}
+        {/* Left Hero Box (7 Cols): TOTAL FARE + DISTANCE KM */}
         <div className="col-span-7 p-2.5 glass-card rounded-2xl border border-cyan-500/30 bg-gradient-to-br from-slate-900/90 via-cyan-950/30 to-slate-900/90 flex flex-col justify-between items-center relative overflow-hidden shadow-2xl">
           <div className="text-[10px] uppercase tracking-widest font-black text-cyan-300 mb-0.5 flex items-center space-x-1">
             <Zap className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
@@ -243,7 +230,7 @@ export default function TelemetryPanel({
             <span className="text-sm font-bold text-slate-400">.00</span>
           </div>
 
-          {/* Integrated Distance Badge (EXTRA LARGE) */}
+          {/* Integrated Distance Badge */}
           <div className="w-full pt-1.5 border-t border-white/10 flex items-center justify-between px-2">
             <span className="text-[10px] uppercase font-black text-slate-300">Distance</span>
             <div className="flex items-baseline space-x-1">
@@ -253,7 +240,7 @@ export default function TelemetryPanel({
           </div>
         </div>
 
-        {/* Right Stack (5 Cols): TOTAL TIME & WAIT TIME (EXTRA LARGE PASSENGER READOUT) */}
+        {/* Right Stack (5 Cols): TOTAL TIME & WAIT TIME */}
         <div className="col-span-5 grid grid-rows-2 gap-1.5">
           <div className="p-2 glass-card rounded-xl border border-white/10 flex flex-col justify-center items-center">
             <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1">
@@ -277,7 +264,7 @@ export default function TelemetryPanel({
         </div>
       </div>
 
-      {/* 3. BOTTOM ACTION SECTION: Extra Large Speed Badge + Driving Action Button */}
+      {/* 3. BOTTOM ACTION SECTION: Speed Badge + Driving Action Button */}
       <div className="pt-1 flex items-center space-x-1.5 shrink-0">
         <div className="w-[35%] p-2 glass-card rounded-xl border border-cyan-500/40 flex items-center justify-between px-2">
           <div className="flex items-center space-x-1 text-slate-400">
@@ -297,7 +284,7 @@ export default function TelemetryPanel({
               className="w-full py-3 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-1.5 shadow-xl shadow-emerald-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all"
             >
               <Play className="w-4 h-4 fill-slate-950" />
-              <span>START ROAD PICKUP METER</span>
+              <span>{destinationLocation ? 'START RIDE NAVIGATION' : 'START ROAD PICKUP METER'}</span>
             </button>
           )}
 
