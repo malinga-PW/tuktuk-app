@@ -1,0 +1,122 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import 'leaflet/dist/leaflet.css';
+
+:root {
+  --background: #07090e;
+  --foreground: #f3f4f6;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Glassmorphism utility classes */
+.glass-panel {
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+}
+
+.glass-card {
+  background: rgba(30, 41, 59, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.glass-pill {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+/* Glowing text effects for HUD digits */
+.glow-cyan {
+  color: #00f2fe;
+  text-shadow: 0 0 12px rgba(0, 242, 254, 0.7), 0 0 24px rgba(0, 242, 254, 0.4);
+}
+
+.glow-green {
+  color: #39ff14;
+  text-shadow: 0 0 12px rgba(57, 255, 20, 0.7), 0 0 24px rgba(57, 255, 20, 0.4);
+}
+
+.glow-amber {
+  color: #ffb300;
+  text-shadow: 0 0 12px rgba(255, 179, 0, 0.7), 0 0 24px rgba(255, 179, 0, 0.4);
+}
+
+.glow-red {
+  color: #ff1744;
+  text-shadow: 0 0 12px rgba(255, 23, 68, 0.7), 0 0 24px rgba(255, 23, 68, 0.4);
+}
+
+/* Windshield HUD mode flip */
+.hud-mirror {
+  transform: scaleX(-1);
+}
+
+/* Leaflet Map custom styles */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  background: #0d1117 !important;
+  font-family: inherit;
+}
+
+.leaflet-control-zoom {
+  border: none !important;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.5) !important;
+}
+
+.leaflet-control-zoom a {
+  background: rgba(15, 23, 42, 0.85) !important;
+  color: #fff !important;
+  border: 1px solid rgba(255,255,255,0.15) !important;
+  backdrop-filter: blur(8px);
+}
+
+/* Custom Pulsing Vehicle Marker */
+.tuktuk-marker-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.tuktuk-pulse {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(0, 242, 254, 0.35);
+  animation: pulsePulse 1.8s ease-out infinite;
+}
+
+@keyframes pulsePulse {
+  0% { transform: scale(0.6); opacity: 0.9; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.5);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
