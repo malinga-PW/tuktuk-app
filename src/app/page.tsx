@@ -12,7 +12,7 @@ import { Compass, Sparkles, Maximize, Minimize } from 'lucide-react';
 const InteractiveMap = dynamic(() => import('@/components/Map/InteractiveMap'), {
   ssr: false,
   loading: () => (
-    <div className="w-full h-full min-h-[300px] rounded-2xl glass-panel flex flex-col items-center justify-center space-y-3">
+    <div className="w-full h-full min-h-[280px] rounded-2xl glass-panel flex flex-col items-center justify-center space-y-3">
       <div className="w-10 h-10 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
       <div className="text-xs font-mono font-bold text-cyan-300">LOADING 1:1 SCALE GPS MAP...</div>
     </div>
@@ -69,7 +69,6 @@ export default function Home() {
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Fullscreen API toggle handler
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(() => {});
@@ -85,7 +84,7 @@ export default function Home() {
   return (
     <main className="w-screen h-screen p-2 md:p-3 flex flex-col justify-between overflow-hidden bg-slate-950 text-white">
       {/* Top Header Navbar */}
-      <header className="h-10 px-3 glass-panel rounded-xl flex items-center justify-between mb-2">
+      <header className="h-10 px-3 glass-panel rounded-xl flex items-center justify-between mb-2 shrink-0">
         <div className="flex items-center space-x-2">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-cyan-500 to-emerald-400 flex items-center justify-center text-slate-950 font-black text-sm shadow-md shadow-cyan-500/20">
             🛺
@@ -109,7 +108,7 @@ export default function Home() {
           <span>•</span>
           <div className="flex items-center space-x-1 text-emerald-400 font-bold">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>{useRealGps ? '📡 Real Phone GPS Connected' : 'Simulated GPS Mode'}</span>
+            <span>{useRealGps ? '📡 Real Phone GPS Active' : 'Simulated GPS Mode'}</span>
           </div>
         </div>
 
@@ -125,14 +124,14 @@ export default function Home() {
           </button>
 
           <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
-          <span className="hidden sm:inline">1:1 SCALE MAP</span>
+          <span className="hidden sm:inline font-bold text-cyan-300">1:1 SQUARE MAP</span>
         </div>
       </header>
 
-      {/* Landscape Split Grid */}
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-3 min-h-0 overflow-hidden">
-        {/* Left Panel: 1:1 Scale Map */}
-        <section className="md:col-span-7 h-full w-full relative">
+      {/* Landscape Split View: Left Map Panel (Strict 1:1 Square Aspect Ratio) & Right Telemetry Panel */}
+      <div className="flex-1 flex flex-row space-x-2 md:space-x-3 min-h-0 overflow-hidden">
+        {/* Left Panel: 1:1 Square Aspect Ratio Map Container on Mobile Landscape */}
+        <section className="h-full aspect-square shrink-0 relative">
           <InteractiveMap
             currentPosition={currentPosition}
             routePath={routePath}
@@ -153,8 +152,8 @@ export default function Home() {
           />
         </section>
 
-        {/* Right Panel: Cost, KM, Waiting Time Telemetry HUD */}
-        <section className="md:col-span-5 h-full w-full flex flex-col">
+        {/* Right Panel: Telemetry HUD (Takes all remaining width) */}
+        <section className="flex-1 h-full min-w-0 flex flex-col">
           <TelemetryPanel
             status={status}
             distanceKm={distanceKm}

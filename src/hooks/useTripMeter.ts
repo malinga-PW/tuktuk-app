@@ -33,10 +33,10 @@ export interface LocationItem {
   lng: number;
 }
 
-export const DEFAULT_PICKUP: LocationItem = {
-  id: 'pickup-1',
-  name: 'Lotus Tower Pickup',
-  address: 'D.R. Wijewardena Mawatha, Colombo 10',
+export const INITIAL_REAL_GPS_PICKUP: LocationItem = {
+  id: 'pickup-gps-auto',
+  name: 'Detecting Real GPS Location...',
+  address: 'Fetching device hardware GPS...',
   lat: 6.92712,
   lng: 79.86120,
 };
@@ -49,9 +49,8 @@ export const DEFAULT_DESTINATION: LocationItem = {
   lng: 79.84420,
 };
 
-// Calculate Haversine distance between 2 GPS coordinates in KM
 export function getHaversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371; // Earth radius in km
+  const R = 6371;
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
   const a =
@@ -71,12 +70,12 @@ export function useTripMeter() {
   const [isHudMirrored, setIsHudMirrored] = useState<boolean>(false);
 
   // Real Mobile GPS state
-  const [useRealGps, setUseRealGps] = useState<boolean>(false);
+  const [useRealGps, setUseRealGps] = useState<boolean>(true); // Active by default
   const [gpsError, setGpsError] = useState<string | null>(null);
   const watchIdRef = useRef<number | null>(null);
 
-  // Locations state
-  const [pickupLocation, setPickupLocation] = useState<LocationItem>(DEFAULT_PICKUP);
+  // Locations state (Real GPS Auto-Detect)
+  const [pickupLocation, setPickupLocation] = useState<LocationItem>(INITIAL_REAL_GPS_PICKUP);
   const [destinationLocation, setDestinationLocation] = useState<LocationItem | null>(DEFAULT_DESTINATION);
   const [isPinpointDraggingMode, setIsPinpointDraggingMode] = useState<boolean>(false);
   const [mapCenterCoords, setMapCenterCoords] = useState<{ lat: number, lng: number }>({ lat: DEFAULT_DESTINATION.lat, lng: DEFAULT_DESTINATION.lng });
@@ -87,11 +86,11 @@ export function useTripMeter() {
 
   // Navigation route path state (OSRM Real Road Geometries)
   const [fullNavPath, setFullNavPath] = useState<RoutePoint[]>([
-    { lat: DEFAULT_PICKUP.lat, lng: DEFAULT_PICKUP.lng, streetName: DEFAULT_PICKUP.name },
+    { lat: INITIAL_REAL_GPS_PICKUP.lat, lng: INITIAL_REAL_GPS_PICKUP.lng, streetName: INITIAL_REAL_GPS_PICKUP.name },
     { lat: DEFAULT_DESTINATION.lat, lng: DEFAULT_DESTINATION.lng, streetName: DEFAULT_DESTINATION.name },
   ]);
   const [routeIndex, setRouteIndex] = useState<number>(0);
-  const [routePath, setRoutePath] = useState<RoutePoint[]>([DEFAULT_PICKUP]);
+  const [routePath, setRoutePath] = useState<RoutePoint[]>([INITIAL_REAL_GPS_PICKUP]);
 
   // Map tile style
   const [mapTileStyle, setMapTileStyle] = useState<'streets' | 'dark' | 'satellite'>('streets');
@@ -119,7 +118,31 @@ export function useTripMeter() {
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // OSRM Real-Road Routing Engine (Snaps strictly to actual streets in Sri Lanka!)
+  // Auto-Detect Real Mobile GPS Location on App Load
+  useEffect(() => {
+    if (typeof window !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          const realPickup: LocationItem = {
+            id: 'real-pickup-initial',
+            name: 'Current Location (Real GPS)',
+            address: `GPS (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`,
+            lat: latitude,
+            lng: longitude,
+          };
+          setPickupLocation(realPickup);
+          setRoutePath([{ lat: latitude, lng: longitude, streetName: 'Current Location' }]);
+        },
+        () => {
+          // Keep default if permission denied
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    }
+  }, []);
+
+  // OSRM Real-Road Routing Engine
   const fetchOsrmRoute = useCallback(async (start: { lat: number, lng: number }, end: { lat: number, lng: number }) => {
     try {
       const url = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`;
@@ -127,7 +150,7 @@ export function useTripMeter() {
       if (res.ok) {
         const data = await res.json();
         if (data.routes && data.routes[0] && data.routes[0].geometry) {
-          const coords = data.routes[0].geometry.coordinates; // Array of [lng, lat]
+          const coords = data.routes[0].geometry.coordinates;
           const osrmPoints: RoutePoint[] = coords.map((c: [number, number], idx: number) => ({
             lat: c[1],
             lng: c[0],
@@ -142,17 +165,15 @@ export function useTripMeter() {
         }
       }
     } catch {
-      // Fallback direct line if OSRM is offline
+      // Fallback
     }
 
-    // Default fallback line
     setFullNavPath([
       { lat: start.lat, lng: start.lng },
       { lat: end.lat, lng: end.lng },
     ]);
   }, []);
 
-  // Fetch OSRM Road Route whenever pickup or destination changes
   useEffect(() => {
     if (destinationLocation) {
       fetchOsrmRoute(pickupLocation, destinationLocation);
@@ -197,7 +218,7 @@ export function useTripMeter() {
             const lastPt = prev[prev.length - 1];
             if (lastPt) {
               const deltaKm = getHaversineDistance(lastPt.lat, lastPt.lng, latitude, longitude);
-              if (deltaKm > 0.005) { // 5 meters threshold
+              if (deltaKm > 0.005) {
                 setDistanceKm((d) => d + deltaKm);
                 meterAudio.playTick();
               }
@@ -223,7 +244,7 @@ export function useTripMeter() {
     };
   }, [useRealGps, status]);
 
-  // Nominatim OpenStreetMap Search
+  // Nominatim Search
   const searchPlaces = useCallback(async (query: string) => {
     if (!query || query.trim().length < 2) {
       setSearchResults([]);
@@ -252,7 +273,7 @@ export function useTripMeter() {
         setSearchResults(formatted);
       }
     } catch {
-      // Ignore search errors
+      // Ignore
     } finally {
       setIsSearchingPlaces(false);
     }
@@ -323,11 +344,11 @@ export function useTripMeter() {
     setCurrentSpeed(0);
     setDestinationLocation(null);
     setFullNavPath([
-      { lat: DEFAULT_PICKUP.lat, lng: DEFAULT_PICKUP.lng },
+      { lat: pickupLocation.lat, lng: pickupLocation.lng },
       { lat: DEFAULT_DESTINATION.lat, lng: DEFAULT_DESTINATION.lng },
     ]);
     setRouteIndex(0);
-    setRoutePath([DEFAULT_PICKUP]);
+    setRoutePath([pickupLocation]);
     setIsPinpointDraggingMode(false);
     setSearchResults([]);
   };
@@ -370,7 +391,6 @@ export function useTripMeter() {
           return nextVal;
         });
 
-        // Follow OSRM Road Path
         setRouteIndex((prevIdx) => {
           const nextIdx = prevIdx + 1;
           if (nextIdx >= fullNavPath.length) {
