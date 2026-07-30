@@ -41,14 +41,6 @@ export const INITIAL_REAL_GPS_PICKUP: LocationItem = {
   lng: 79.86120,
 };
 
-export const DEFAULT_DESTINATION: LocationItem = {
-  id: 'dest-1',
-  name: 'Shangri-La Hotel & One Galle Face',
-  address: '1 Centre Road, Colombo 02',
-  lat: 6.92810,
-  lng: 79.84420,
-};
-
 export function getHaversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371;
   const dLat = (lat2 - lat1) * (Math.PI / 180);
@@ -75,11 +67,11 @@ export function useTripMeter() {
   const watchIdRef = useRef<number | null>(null);
   const wakeLockRef = useRef<unknown | null>(null);
 
-  // Locations state
+  // Locations state (No hardcoded destination by default)
   const [pickupLocation, setPickupLocation] = useState<LocationItem>(INITIAL_REAL_GPS_PICKUP);
-  const [destinationLocation, setDestinationLocation] = useState<LocationItem | null>(DEFAULT_DESTINATION);
+  const [destinationLocation, setDestinationLocation] = useState<LocationItem | null>(null);
   const [isPinpointDraggingMode, setIsPinpointDraggingMode] = useState<boolean>(false);
-  const [mapCenterCoords, setMapCenterCoords] = useState<{ lat: number, lng: number }>({ lat: DEFAULT_DESTINATION.lat, lng: DEFAULT_DESTINATION.lng });
+  const [mapCenterCoords, setMapCenterCoords] = useState<{ lat: number, lng: number }>({ lat: INITIAL_REAL_GPS_PICKUP.lat, lng: INITIAL_REAL_GPS_PICKUP.lng });
 
   // Route Options
   const [avoidTolls, setAvoidTolls] = useState<boolean>(true);
@@ -88,7 +80,6 @@ export function useTripMeter() {
   // Navigation route path state
   const [fullNavPath, setFullNavPath] = useState<RoutePoint[]>([
     { lat: INITIAL_REAL_GPS_PICKUP.lat, lng: INITIAL_REAL_GPS_PICKUP.lng, streetName: INITIAL_REAL_GPS_PICKUP.name },
-    { lat: DEFAULT_DESTINATION.lat, lng: DEFAULT_DESTINATION.lng, streetName: DEFAULT_DESTINATION.name },
   ]);
   const [routeIndex, setRouteIndex] = useState<number>(0);
   const [routePath, setRoutePath] = useState<RoutePoint[]>([INITIAL_REAL_GPS_PICKUP]);
@@ -119,14 +110,14 @@ export function useTripMeter() {
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Screen Wake Lock API (Always On Display)
+  // Screen Wake Lock API
   const requestWakeLock = async () => {
     try {
       if (typeof window !== 'undefined' && 'wakeLock' in navigator) {
         wakeLockRef.current = await (navigator as unknown as { wakeLock: { request: (type: string) => Promise<unknown> } }).wakeLock.request('screen');
       }
     } catch {
-      // Ignore wake lock error
+      // Ignore
     }
   };
 
@@ -145,6 +136,7 @@ export function useTripMeter() {
             lng: longitude,
           };
           setPickupLocation(realPickup);
+          setMapCenterCoords({ lat: latitude, lng: longitude });
           setRoutePath([{ lat: latitude, lng: longitude, streetName: 'Current Location' }]);
         },
         () => {},
@@ -153,7 +145,7 @@ export function useTripMeter() {
     }
   }, []);
 
-  // OSRM Real-Road Routing Engine
+  // OSRM Real-Road Routing Engine (only called if destination exists)
   const fetchOsrmRoute = useCallback(async (start: { lat: number, lng: number }, end: { lat: number, lng: number }) => {
     try {
       const url = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`;
@@ -188,6 +180,8 @@ export function useTripMeter() {
   useEffect(() => {
     if (destinationLocation) {
       fetchOsrmRoute(pickupLocation, destinationLocation);
+    } else {
+      setFullNavPath([{ lat: pickupLocation.lat, lng: pickupLocation.lng, streetName: pickupLocation.name }]);
     }
   }, [pickupLocation, destinationLocation, avoidTolls, fetchOsrmRoute]);
 
@@ -345,7 +339,7 @@ export function useTripMeter() {
     setWaitingSeconds(0);
     setCurrentSpeed(0);
     setRouteIndex(0);
-    setRoutePath([fullNavPath[0]]);
+    setRoutePath([pickupLocation]);
   };
 
   const clearAllTripData = () => {
@@ -357,7 +351,6 @@ export function useTripMeter() {
     setDestinationLocation(null);
     setFullNavPath([
       { lat: pickupLocation.lat, lng: pickupLocation.lng },
-      { lat: DEFAULT_DESTINATION.lat, lng: DEFAULT_DESTINATION.lng },
     ]);
     setRouteIndex(0);
     setRoutePath([pickupLocation]);
@@ -403,26 +396,28 @@ export function useTripMeter() {
           return nextVal;
         });
 
-        setRouteIndex((prevIdx) => {
-          const nextIdx = prevIdx + 1;
-          if (nextIdx >= fullNavPath.length) {
-            setStatus('FINISHED');
-            setCurrentSpeed(0);
-            meterAudio.playStopChime();
-            return prevIdx;
-          }
+        if (destinationLocation && fullNavPath.length > 1) {
+          setRouteIndex((prevIdx) => {
+            const nextIdx = prevIdx + 1;
+            if (nextIdx >= fullNavPath.length) {
+              setStatus('FINISHED');
+              setCurrentSpeed(0);
+              meterAudio.playStopChime();
+              return prevIdx;
+            }
 
-          const newPoint = fullNavPath[nextIdx];
-          setRoutePath((prevPath) => [...prevPath, newPoint]);
-          return nextIdx;
-        });
+            const newPoint = fullNavPath[nextIdx];
+            setRoutePath((prevPath) => [...prevPath, newPoint]);
+            return nextIdx;
+          });
+        }
       }
     }, 1000);
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [status, isSimulatingTraffic, fullNavPath, useRealGps]);
+  }, [status, isSimulatingTraffic, fullNavPath, useRealGps, destinationLocation]);
 
   const currentPosition = routePath[routePath.length - 1] || pickupLocation;
 
@@ -450,8 +445,6 @@ export function useTripMeter() {
     routeType,
     searchResults,
     isSearchingPlaces,
-    useRealGps,
-    gpsError,
     searchPlaces,
     clearAllTripData,
     setUseRealGps,

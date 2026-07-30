@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { TripStatus, TariffConfig, LocationItem } from '@/hooks/useTripMeter';
-import { Play, Pause, Square, RotateCcw, Settings, Receipt, Volume2, VolumeX, Zap, Sliders, Plus, Minus, MapPin, Navigation, Target, CheckCircle2, ShieldAlert, Loader2, X, Radio, Clock, Navigation2 } from 'lucide-react';
+import { Play, Pause, Square, RotateCcw, Settings, Receipt, Volume2, VolumeX, Zap, Sliders, Plus, Minus, MapPin, Navigation, Target, CheckCircle2, ShieldAlert, Loader2, X, Radio, Clock } from 'lucide-react';
 
 interface TelemetryPanelProps {
   status: TripStatus;
@@ -122,7 +122,7 @@ export default function TelemetryPanel({
 
   return (
     <div className={`w-full h-full flex flex-col justify-between p-2 glass-panel rounded-2xl border border-white/10 ${isHudMirrored ? 'hud-mirror' : ''}`}>
-      {/* 1. Header Bar: Status Badge + GPS Toggle + Reset + Control Drawers (Ultra Compact) */}
+      {/* Header Bar */}
       <div className="flex items-center justify-between pb-1 border-b border-white/10 shrink-0">
         <div className="flex items-center space-x-1.5">
           <div className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider flex items-center space-x-1 ${
@@ -136,7 +136,7 @@ export default function TelemetryPanel({
               status === 'PAUSED' ? 'bg-amber-400' :
               status === 'FINISHED' ? 'bg-cyan-400' : 'bg-slate-500'
             }`}></span>
-            <span>{status === 'IDLE' ? 'READY' : status}</span>
+            <span>{status === 'IDLE' ? 'ROAD PICKUP READY' : status}</span>
           </div>
 
           <button
@@ -193,18 +193,18 @@ export default function TelemetryPanel({
         </div>
       )}
 
-      {/* 2. Pickup & Destination INLINE Horizontal Split Row */}
+      {/* Pickup & Optional Destination INLINE Horizontal Split Row */}
       <div className="my-1 p-1.5 glass-card rounded-xl border border-white/10 grid grid-cols-12 gap-1.5 items-center relative shrink-0">
         {/* Pickup (Left 5 Cols) */}
         <div className="col-span-5 flex items-center space-x-1 overflow-hidden border-r border-white/10 pr-1">
           <Navigation className="w-3 h-3 text-emerald-400 flex-shrink-0 fill-emerald-400" />
           <div className="overflow-hidden">
-            <div className="text-[8px] uppercase font-black text-slate-400 tracking-wider">Pickup</div>
+            <div className="text-[8px] uppercase font-black text-slate-400 tracking-wider">Pickup (GPS)</div>
             <div className="text-[10px] font-bold text-white truncate">{pickupLocation.name}</div>
           </div>
         </div>
 
-        {/* Destination Search (Right 7 Cols) */}
+        {/* Optional Destination Search (Right 7 Cols) */}
         <div className="col-span-7 flex items-center space-x-1">
           <MapPin className="w-3 h-3 text-rose-400 flex-shrink-0 fill-rose-400" />
           <div className="flex-1 relative">
@@ -217,7 +217,7 @@ export default function TelemetryPanel({
                   setIsSearchOpen(true);
                 }}
                 onFocus={() => setIsSearchOpen(true)}
-                placeholder="Search place in SL..."
+                placeholder="(Optional) Destination..."
                 className="w-full bg-slate-900/90 border border-white/15 px-1.5 py-0.5 pr-5 rounded-md text-[10px] font-bold text-white focus:outline-none focus:border-cyan-400"
               />
               {searchQuery && (
@@ -231,7 +231,6 @@ export default function TelemetryPanel({
               )}
             </div>
 
-            {/* Dropdown Live Search Results */}
             {isSearchOpen && searchResults.length > 0 && (
               <div className="absolute top-full left-0 right-0 mt-1 z-50 glass-panel rounded-xl border border-cyan-500/40 max-h-36 overflow-y-auto shadow-2xl p-1 bg-slate-950">
                 {searchResults.map((item) => (
@@ -303,9 +302,8 @@ export default function TelemetryPanel({
         </div>
       )}
 
-      {/* 3. HERO LAYOUT: Total Fare on Left (50%), Total Time & Wait Time INLINE on Right (50%) */}
+      {/* Hero Layout: Total Fare on Left, Total Time & Wait Time INLINE on Right */}
       <div className="my-1 grid grid-cols-12 gap-1.5 items-stretch flex-1">
-        {/* Left Side (7 Cols): TOTAL FARE DISPLAY */}
         <div className="col-span-7 p-2 glass-card rounded-xl border border-cyan-500/20 bg-gradient-to-br from-slate-900/90 via-cyan-950/20 to-slate-900/90 flex flex-col justify-center items-center relative overflow-hidden">
           <div className="text-[8px] uppercase tracking-widest font-black text-cyan-300/80 mb-0.5 flex items-center space-x-1">
             <Zap className="w-2.5 h-2.5 text-cyan-400 animate-pulse" />
@@ -325,9 +323,7 @@ export default function TelemetryPanel({
           </div>
         </div>
 
-        {/* Right Side (5 Cols): TOTAL TIME & WAIT TIME INLINE STACK */}
         <div className="col-span-5 grid grid-rows-2 gap-1">
-          {/* Total Duration */}
           <div className="p-1.5 glass-card rounded-xl border border-white/5 flex flex-col justify-center items-center">
             <div className="text-[8px] font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1">
               <Clock className="w-2.5 h-2.5 text-cyan-400" />
@@ -338,7 +334,6 @@ export default function TelemetryPanel({
             </div>
           </div>
 
-          {/* Wait Time */}
           <div className="p-1.5 glass-card rounded-xl border border-white/5 flex flex-col justify-center items-center">
             <div className="text-[8px] font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1">
               <Clock className="w-2.5 h-2.5 text-amber-400" />
@@ -351,9 +346,8 @@ export default function TelemetryPanel({
         </div>
       </div>
 
-      {/* 4. BOTTOM BAR: Start / Stop Button + Distance (KM) INLINE in 1 row */}
+      {/* Bottom Bar: Direct Road Pickup Button + Distance (KM) INLINE */}
       <div className="pt-1 flex items-center space-x-1.5 shrink-0">
-        {/* Distance Badge (Inline 35% width) */}
         <div className="w-[38%] p-1.5 glass-card rounded-xl border border-emerald-500/30 flex items-center justify-between px-2">
           <div className="text-[8px] uppercase font-black text-slate-400">Distance</div>
           <div className="flex items-baseline space-x-0.5">
@@ -362,7 +356,6 @@ export default function TelemetryPanel({
           </div>
         </div>
 
-        {/* Start / Pause / End Button (Inline 65% width) */}
         <div className="flex-1">
           {status === 'IDLE' && (
             <button
@@ -370,7 +363,7 @@ export default function TelemetryPanel({
               className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-1 shadow-lg shadow-emerald-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all"
             >
               <Play className="w-3.5 h-3.5 fill-slate-950" />
-              <span>START RIDE NAVIGATION</span>
+              <span>{destinationLocation ? 'START RIDE NAVIGATION' : 'START ROAD PICKUP METER'}</span>
             </button>
           )}
 
