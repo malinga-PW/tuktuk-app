@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { TripStatus, TariffConfig, LocationItem } from '@/hooks/useTripMeter';
-import { Play, Pause, Square, RotateCcw, Settings, Receipt, Volume2, VolumeX, Zap, Sliders, ShieldAlert, Radio, Clock, Gauge, Maximize, Minimize, History } from 'lucide-react';
+import { Play, Pause, Square, RotateCcw, Settings, Receipt, Volume2, VolumeX, Zap, Sliders, ShieldAlert, Radio, Clock, Gauge, Maximize, Minimize, History, Navigation2 } from 'lucide-react';
 
 interface TelemetryPanelProps {
   status: TripStatus;
@@ -12,6 +12,9 @@ interface TelemetryPanelProps {
   currentSpeed: number;
   totalFare: number;
   tariff: TariffConfig;
+  estimatedDistanceKm?: number;
+  estimatedDurationMins?: number;
+  estimatedFare?: number;
   isAudioMuted: boolean;
   isHudMirrored: boolean;
   pickupLocation: LocationItem;
@@ -44,6 +47,9 @@ export default function TelemetryPanel({
   currentSpeed,
   totalFare,
   tariff,
+  estimatedDistanceKm = 0,
+  estimatedDurationMins = 0,
+  estimatedFare = 0,
   isAudioMuted,
   isHudMirrored,
   destinationLocation,
@@ -97,12 +103,12 @@ export default function TelemetryPanel({
 
   return (
     <div className={`w-full h-full flex flex-col justify-between p-2 glass-panel rounded-2xl border border-white/10 overflow-hidden ${isHudMirrored ? 'hud-mirror' : ''}`}>
-      {/* 1. TOP HEADER SECTION (Optimized Roomy Layout) */}
+      {/* 1. TOP HEADER SECTION */}
       <div className="flex items-center justify-between pb-1.5 border-b border-white/10 shrink-0">
         <div className="flex items-center space-x-1.5">
           <button
             onClick={onToggleRealGps}
-            className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase flex items-center space-x-1 transition-all border ${
+            className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase flex items-center space-x-1 transition-all border ${
               useRealGps
                 ? 'bg-emerald-500/30 text-emerald-300 border-emerald-500/50 shadow-md shadow-emerald-500/20 animate-pulse'
                 : 'glass-pill text-slate-400 border-white/10'
@@ -177,6 +183,23 @@ export default function TelemetryPanel({
         </div>
       )}
 
+      {/* ESTIMATED FARE & TIME DISPLAY BADGE */}
+      {destinationLocation && estimatedFare > 0 && (
+        <div className="my-1 p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-between px-3 text-xs font-mono shrink-0 shadow-lg animate-fadeIn">
+          <div className="flex items-center space-x-2 text-[10px] text-slate-300 font-bold">
+            <span className="text-cyan-400 uppercase font-black">DEST:</span>
+            <span className="text-white truncate max-w-[120px]">{destinationLocation.name}</span>
+          </div>
+
+          <div className="flex items-center space-x-2 text-[10px]">
+            <span className="text-slate-400">{estimatedDistanceKm.toFixed(2)} KM ({estimatedDurationMins} Mins)</span>
+            <span className="px-2 py-0.5 rounded-lg bg-cyan-500/20 text-cyan-300 font-black border border-cyan-500/40">
+              EST {tariff.currency} {estimatedFare.toLocaleString()}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Rate Control Drawer */}
       {showControlPanel && (
         <div className="my-1 p-2 glass-card rounded-xl border border-cyan-500/30 space-y-1 animate-fadeIn bg-slate-900/90 shadow-xl shrink-0">
@@ -211,7 +234,7 @@ export default function TelemetryPanel({
         </div>
       )}
 
-      {/* 2. MIDDLE HERO HUD TILES (Reduced Height by 25%, Maximized Font Sizes Fit to Tiles) */}
+      {/* 2. MIDDLE HERO HUD TILES */}
       <div className="my-1.5 grid grid-cols-12 gap-2 items-stretch shrink-0 max-h-[55%]">
         {/* Left Hero Tile (7 Cols): TOTAL FARE + DISTANCE KM */}
         <div className="col-span-7 p-3 glass-card rounded-2xl border border-cyan-500/30 bg-gradient-to-br from-slate-900/95 via-cyan-950/40 to-slate-900/95 flex flex-col justify-between items-center relative overflow-hidden shadow-2xl">
@@ -220,7 +243,6 @@ export default function TelemetryPanel({
             <span>TOTAL FARE ({tariff.currency})</span>
           </div>
 
-          {/* Maximized Fare Numbers Fit to Tile */}
           <div className="flex items-baseline space-x-1 my-1">
             <span className="text-lg font-black text-cyan-400">{tariff.currency}</span>
             <span className="text-6xl sm:text-7xl lg:text-8xl font-black tracking-tighter font-mono glow-cyan leading-none">
@@ -229,7 +251,6 @@ export default function TelemetryPanel({
             <span className="text-sm font-bold text-slate-400">.00</span>
           </div>
 
-          {/* Maximized Distance Badge Fit to Tile */}
           <div className="w-full pt-1.5 border-t border-white/10 flex items-center justify-between px-1">
             <span className="text-[10px] uppercase font-black text-slate-300">Distance</span>
             <div className="flex items-baseline space-x-1">
@@ -263,7 +284,7 @@ export default function TelemetryPanel({
         </div>
       </div>
 
-      {/* 3. BOTTOM ACTION SECTION (Expanded & Optimised for Roomy Driving Control) */}
+      {/* 3. BOTTOM ACTION SECTION */}
       <div className="pt-2 flex items-center space-x-2 shrink-0">
         <div className="w-[32%] p-2.5 glass-card rounded-2xl border border-cyan-500/40 flex items-center justify-between px-3 shadow-xl">
           <div className="flex items-center space-x-1 text-slate-400">

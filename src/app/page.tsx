@@ -90,6 +90,10 @@ export default function Home() {
           showTrafficOverlay={showTrafficOverlay}
           pickupLocation={pickupLocation}
           destinationLocation={destinationLocation}
+          estimatedDistanceKm={estimatedDistanceKm}
+          estimatedDurationMins={estimatedDurationMins}
+          estimatedFare={estimatedFare}
+          currency={tariff.currency}
           isPinpointDraggingMode={isPinpointDraggingMode}
           avoidTolls={avoidTolls}
           searchResults={searchResults}
@@ -102,7 +106,20 @@ export default function Home() {
           onToggleTraffic={() => setIsSimulatingTraffic(!isSimulatingTraffic)}
           onToggleTrafficOverlay={() => setShowTrafficOverlay(!showTrafficOverlay)}
           onMapCenterChange={(coords) => setMapCenterCoords(coords)}
-          onConfirmPinpoint={confirmPinpointDestination}
+          onConfirmPinpoint={(customCoords) => {
+            if (customCoords) {
+              setDestinationLocation({
+                id: `pin-${Date.now()}`,
+                name: 'Pinned Map Location',
+                address: `GPS (${customCoords.lat.toFixed(4)}, ${customCoords.lng.toFixed(4)})`,
+                lat: customCoords.lat,
+                lng: customCoords.lng,
+              });
+              setIsPinpointDraggingMode(false);
+            } else {
+              confirmPinpointDestination();
+            }
+          }}
         />
       </section>
 
@@ -116,6 +133,9 @@ export default function Home() {
           currentSpeed={currentSpeed}
           totalFare={totalFare}
           tariff={tariff}
+          estimatedDistanceKm={estimatedDistanceKm}
+          estimatedDurationMins={estimatedDurationMins}
+          estimatedFare={estimatedFare}
           isAudioMuted={isAudioMuted}
           isHudMirrored={isHudMirrored}
           pickupLocation={pickupLocation}

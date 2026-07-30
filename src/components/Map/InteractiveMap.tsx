@@ -4,10 +4,10 @@ import React, { useEffect, useState, useRef } from 'react';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { RoutePoint, LocationItem } from '@/hooks/useTripMeter';
-import { Navigation, Layers, Crosshair, Eye, MapPin, X, CheckCircle2, Target, Loader2 } from 'lucide-react';
+import { Navigation, Layers, Crosshair, Eye, MapPin, X, CheckCircle2, Target, Loader2, Zap, Clock } from 'lucide-react';
 import { meterAudio } from '@/utils/audio';
 
-// Custom Rotating Vehicle Navigation Arrow Icon (Heading Direction)
+// Custom Rotating Vehicle Navigation Arrow Icon
 const createNavigationArrowIcon = (headingDeg: number = 0) => {
   return L.divIcon({
     className: 'vehicle-nav-arrow-icon',
@@ -40,7 +40,7 @@ const destIcon = L.divIcon({
   iconAnchor: [16, 32],
 });
 
-// Smooth Map Pan Controller (Eliminates Jitter/Shaking)
+// Smooth Map Pan Controller
 function SmoothMapController({ center, zoomLevel }: { center: [number, number], zoomLevel?: number }) {
   const map = useMap();
   const prevCenterRef = useRef<[number, number]>(center);
@@ -65,20 +65,14 @@ function SmoothMapController({ center, zoomLevel }: { center: [number, number], 
   return null;
 }
 
-// Drag Pin Center Detector
-function MapCenterListener({ onCenterChange, isPinpointMode }: { onCenterChange: (coords: { lat: number, lng: number }) => void, isPinpointMode: boolean }) {
+// Leaflet Map Reference Capture & Pin Handler
+function MapPinHandler({ onConfirmPin, isPinpointMode }: { onConfirmPin: (lat: number, lng: number) => void, isPinpointMode: boolean }) {
   const map = useMap();
+  
   useEffect(() => {
-    if (!isPinpointMode) return;
-    const handleMove = () => {
-      const center = map.getCenter();
-      onCenterChange({ lat: center.lat, lng: center.lng });
-    };
-    map.on('move', handleMove);
-    return () => {
-      map.off('move', handleMove);
-    };
-  }, [map, isPinpointMode, onCenterChange]);
+    (window as unknown as { __leafletMap?: L.Map }).__leafletMap = map;
+  }, [map]);
+
   return null;
 }
 
@@ -93,6 +87,10 @@ interface InteractiveMapProps {
   showTrafficOverlay: boolean;
   pickupLocation: LocationItem;
   destinationLocation: LocationItem | null;
+  estimatedDistanceKm?: number;
+  estimatedDurationMins?: number;
+  estimatedFare?: number;
+  currency?: string;
   isPinpointDraggingMode: boolean;
   avoidTolls: boolean;
   searchResults: LocationItem[];
@@ -105,7 +103,7 @@ interface InteractiveMapProps {
   onToggleTraffic: () => void;
   onToggleTrafficOverlay: () => void;
   onMapCenterChange: (coords: { lat: number, lng: number }) => void;
-  onConfirmPinpoint: () => void;
+  onConfirmPinpoint: (customCoords?: { lat: number, lng: number }) => void;
 }
 
 export default function InteractiveMap({
@@ -116,6 +114,10 @@ export default function InteractiveMap({
   vehicleHeading = 0,
   tileStyle,
   destinationLocation,
+  estimatedDistanceKm = 0,
+  estimatedDurationMins = 0,
+  estimatedFare = 0,
+  currency = 'LKR',
   isPinpointDraggingMode,
   searchResults,
   isSearchingPlaces,
@@ -124,7 +126,6 @@ export default function InteractiveMap({
   onClearDestination,
   onTogglePinpointMode,
   onTileStyleChange,
-  onMapCenterChange,
   onConfirmPinpoint,
 }: InteractiveMapProps) {
   const [targetZoom, setTargetZoom] = useState<number>(15);
@@ -176,6 +177,16 @@ export default function InteractiveMap({
     setIsSearchOpen(false);
   };
 
+  const handleConfirmPinpointClick = () => {
+    const leafletMap = (window as unknown as { __leafletMap?: L.Map }).__leafletMap;
+    if (leafletMap) {
+      const center = leafletMap.getCenter();
+      onConfirmPinpoint({ lat: center.lat, lng: center.lng });
+    } else {
+      onConfirmPinpoint();
+    }
+  };
+
   const currentHeadingAngle = currentPosition.heading !== undefined ? currentPosition.heading : vehicleHeading;
 
   return (
@@ -188,7 +199,7 @@ export default function InteractiveMap({
         className="w-full h-full z-0"
       >
         <SmoothMapController center={[currentPosition.lat, currentPosition.lng]} zoomLevel={targetZoom} />
-        <MapCenterListener onCenterChange={onMapCenterChange} isPinpointMode={isPinpointDraggingMode} />
+        <MapPinHandler onConfirmPin={() => {}} isPinpointMode={isPinpointDraggingMode} />
 
         <TileLayer
           attribution='&copy; OpenStreetMap'
@@ -246,70 +257,96 @@ export default function InteractiveMap({
       </MapContainer>
 
       {/* OVERLAY DESTINATION SEARCH BAR & DRAG PIN AT TOP OF MAP AREA */}
-      <div className="absolute top-2 left-2 right-12 z-30 flex items-center space-x-1.5 pointer-events-auto">
-        <div className="flex-1 relative glass-panel rounded-xl border border-cyan-500/40 p-1 shadow-2xl bg-slate-950/90">
-          <div className="flex items-center space-x-1.5 relative">
-            <MapPin className="w-4 h-4 text-rose-400 flex-shrink-0 fill-rose-400 ml-1" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setIsSearchOpen(true);
-              }}
-              onFocus={() => setIsSearchOpen(true)}
-              placeholder="Search place in Sri Lanka..."
-              className="w-full bg-transparent border-0 py-1 pr-6 text-xs font-bold text-white focus:outline-none placeholder-slate-400"
-            />
-            {isSearchingPlaces && <Loader2 className="w-3.5 h-3.5 text-cyan-400 animate-spin absolute right-2" />}
-            {searchQuery && !isSearchingPlaces && (
-              <button
-                onClick={handleClearDestination}
-                className="absolute right-2 text-slate-400 hover:text-white"
-                title="Clear Destination"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
+      <div className="absolute top-2 left-2 right-12 z-30 flex flex-col space-y-1 pointer-events-auto">
+        <div className="flex items-center space-x-1.5">
+          <div className="flex-1 relative glass-panel rounded-xl border border-cyan-500/40 p-1 shadow-2xl bg-slate-950/90">
+            <div className="flex items-center space-x-1.5 relative">
+              <MapPin className="w-4 h-4 text-rose-400 flex-shrink-0 fill-rose-400 ml-1" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setIsSearchOpen(true);
+                }}
+                onFocus={() => setIsSearchOpen(true)}
+                placeholder="Search place in Sri Lanka..."
+                className="w-full bg-transparent border-0 py-1 pr-6 text-xs font-bold text-white focus:outline-none placeholder-slate-400"
+              />
+              {isSearchingPlaces && <Loader2 className="w-3.5 h-3.5 text-cyan-400 animate-spin absolute right-2" />}
+              {searchQuery && !isSearchingPlaces && (
+                <button
+                  onClick={handleClearDestination}
+                  className="absolute right-2 text-slate-400 hover:text-white"
+                  title="Clear Destination"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Search Dropdown Results */}
+            {isSearchOpen && searchResults.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 z-50 glass-panel rounded-xl border border-cyan-500/50 max-h-48 overflow-y-auto shadow-2xl p-1 bg-slate-950">
+                {searchResults.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      onSelectDestination(item);
+                      setSearchQuery(item.name);
+                      setIsSearchOpen(false);
+                    }}
+                    className="w-full text-left p-1.5 hover:bg-cyan-500/20 rounded-lg flex items-center justify-between text-xs transition-colors border-b border-white/5 last:border-0"
+                  >
+                    <div className="overflow-hidden mr-1">
+                      <div className="font-bold text-white truncate text-[11px]">{item.name}</div>
+                      <div className="text-[9px] text-slate-400 font-mono truncate">{item.address}</div>
+                    </div>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
+                  </button>
+                ))}
+              </div>
             )}
           </div>
 
-          {/* Search Dropdown Results */}
-          {isSearchOpen && searchResults.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-1 z-50 glass-panel rounded-xl border border-cyan-500/50 max-h-48 overflow-y-auto shadow-2xl p-1 bg-slate-950">
-              {searchResults.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    onSelectDestination(item);
-                    setSearchQuery(item.name);
-                    setIsSearchOpen(false);
-                  }}
-                  className="w-full text-left p-1.5 hover:bg-cyan-500/20 rounded-lg flex items-center justify-between text-xs transition-colors border-b border-white/5 last:border-0"
-                >
-                  <div className="overflow-hidden mr-1">
-                    <div className="font-bold text-white truncate text-[11px]">{item.name}</div>
-                    <div className="text-[9px] text-slate-400 font-mono truncate">{item.address}</div>
-                  </div>
-                  <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
-                </button>
-              ))}
-            </div>
-          )}
+          {/* Drag Pin Button */}
+          <button
+            onClick={onTogglePinpointMode}
+            className={`px-2.5 py-1.5 rounded-xl text-[10px] font-black transition-all border shrink-0 flex items-center space-x-1 shadow-xl ${
+              isPinpointDraggingMode
+                ? 'bg-rose-500 text-white border-rose-400 animate-pulse'
+                : 'glass-panel text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/20'
+            }`}
+            title="Drag Map Center"
+          >
+            <Target className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="hidden sm:inline">{isPinpointDraggingMode ? 'PINNING' : 'DRAG PIN'}</span>
+          </button>
         </div>
 
-        {/* Drag Pin Button */}
-        <button
-          onClick={onTogglePinpointMode}
-          className={`px-2.5 py-1.5 rounded-xl text-[10px] font-black transition-all border shrink-0 flex items-center space-x-1 shadow-xl ${
-            isPinpointDraggingMode
-              ? 'bg-rose-500 text-white border-rose-400 animate-pulse'
-              : 'glass-panel text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/20'
-          }`}
-          title="Drag Map Center"
-        >
-          <Target className="w-3.5 h-3.5 text-cyan-400" />
-          <span className="hidden sm:inline">{isPinpointDraggingMode ? 'PINNING' : 'DRAG PIN'}</span>
-        </button>
+        {/* ESTIMATED FARE & TIME LIVE HUD BADGE OVERLAY ON MAP */}
+        {destinationLocation && estimatedFare > 0 && (
+          <div className="p-1.5 glass-panel rounded-xl border border-cyan-500/50 bg-slate-950/95 flex items-center justify-between px-2.5 shadow-2xl animate-fadeIn">
+            <div className="flex items-center space-x-2 text-[10px] font-mono text-slate-300">
+              <span className="flex items-center space-x-1">
+                <Navigation2 className="w-3 h-3 text-emerald-400" />
+                <span className="font-bold text-emerald-300">{estimatedDistanceKm.toFixed(2)} KM</span>
+              </span>
+              <span>•</span>
+              <span className="flex items-center space-x-1">
+                <Clock className="w-3 h-3 text-cyan-400" />
+                <span className="font-bold text-cyan-200">{estimatedDurationMins} MINS</span>
+              </span>
+            </div>
+
+            <div className="flex items-center space-x-1">
+              <span className="text-[9px] uppercase font-black text-amber-400">EST FARE:</span>
+              <span className="text-xs font-black font-mono text-cyan-300 glow-cyan">
+                {currency} {estimatedFare.toLocaleString()}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Floating Map Layers Button */}
@@ -357,19 +394,19 @@ export default function InteractiveMap({
         </button>
       </div>
 
-      {/* Pinpoint Drag Crosshair Overlay */}
+      {/* Pinpoint Drag Crosshair Overlay (Precisely Centered) */}
       {isPinpointDraggingMode && (
         <div className="absolute inset-0 z-30 pointer-events-none flex flex-col items-center justify-center">
           <div className="relative flex items-center justify-center">
             <div className="w-12 h-12 rounded-full border-2 border-rose-500 animate-ping"></div>
             <Crosshair className="w-8 h-8 text-rose-500 absolute" />
           </div>
-          <div className="mt-2 px-3 py-1 rounded-full bg-rose-600 text-white font-extrabold text-xs shadow-2xl pointer-events-auto">
+          <div className="mt-3 px-3 py-1 rounded-full bg-rose-600 text-white font-extrabold text-xs shadow-2xl pointer-events-auto">
             DRAG MAP TO CENTER PIN
           </div>
           <button
-            onClick={onConfirmPinpoint}
-            className="mt-2 px-4 py-1.5 rounded-xl bg-emerald-500 text-slate-950 font-black text-xs shadow-2xl pointer-events-auto hover:scale-105 active:scale-95"
+            onClick={handleConfirmPinpointClick}
+            className="mt-2 px-5 py-2 rounded-xl bg-emerald-500 text-slate-950 font-black text-xs shadow-2xl pointer-events-auto hover:scale-105 active:scale-95 border border-emerald-300"
           >
             SET DESTINATION PIN
           </button>
