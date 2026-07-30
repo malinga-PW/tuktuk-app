@@ -76,9 +76,9 @@ export default function Home() {
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
 
   return (
-    <main className="w-screen h-screen p-1.5 md:p-2 flex flex-row justify-between overflow-hidden bg-slate-950 text-white space-x-1.5 md:space-x-2">
-      {/* Left Panel: Edge-to-Edge 1:1 Square Map Container with Overlaid Search & Drag Pin */}
-      <section className="h-full aspect-square shrink-0 relative overflow-hidden bg-slate-950">
+    <main className="w-screen h-screen p-1 md:p-2 flex flex-col sm:flex-row justify-between overflow-hidden bg-slate-950 text-white space-y-1 sm:space-y-0 sm:space-x-2">
+      {/* Map Section: Top in Portrait (45vh), Left in Landscape (Full Height Aspect-Square) */}
+      <section className="w-full sm:w-auto h-[44vh] sm:h-full sm:aspect-square shrink-0 relative overflow-hidden bg-slate-950 rounded-2xl">
         <InteractiveMap
           status={status}
           currentPosition={currentPosition}
@@ -124,8 +124,8 @@ export default function Home() {
         />
       </section>
 
-      {/* Right Panel: Extra Large Passenger Telemetry HUD */}
-      <section className="flex-1 h-full min-w-0 flex flex-col">
+      {/* Telemetry Section: Bottom in Portrait (56vh), Right in Landscape (Flex 1 Full Height) */}
+      <section className="w-full sm:flex-1 h-[55vh] sm:h-full min-w-0 flex flex-col overflow-hidden">
         <TelemetryPanel
           status={status}
           distanceKm={distanceKm}

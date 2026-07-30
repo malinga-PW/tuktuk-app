@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { TripStatus, TariffConfig, LocationItem } from '@/hooks/useTripMeter';
-import { Play, Pause, Square, RotateCcw, Settings, Receipt, Volume2, VolumeX, Zap, Sliders, ShieldAlert, Radio, Clock, Gauge, Maximize, Minimize, History, Navigation2 } from 'lucide-react';
+import { Play, Pause, Square, RotateCcw, Settings, Receipt, Volume2, VolumeX, Zap, Sliders, ShieldAlert, Radio, Clock, Gauge, Maximize, Minimize, History, Navigation2, MapPin, Flag } from 'lucide-react';
 
 interface TelemetryPanelProps {
   status: TripStatus;
@@ -52,6 +52,7 @@ export default function TelemetryPanel({
   estimatedFare = 0,
   isAudioMuted,
   isHudMirrored,
+  pickupLocation,
   destinationLocation,
   useRealGps,
   gpsError,
@@ -101,6 +102,11 @@ export default function TelemetryPanel({
     onUpdateTariff((prev) => ({ ...prev, waitRatePerMin: Math.max(0, prev.waitRatePerMin + delta) }));
   };
 
+  // Calculate live trip progress percentage
+  const progressPercent = estimatedDistanceKm > 0
+    ? Math.min(100, Math.max(0, Math.round((distanceKm / estimatedDistanceKm) * 100)))
+    : 0;
+
   return (
     <div className={`w-full h-full flex flex-col justify-between p-2 glass-panel rounded-2xl border border-white/10 overflow-hidden ${isHudMirrored ? 'hud-mirror' : ''}`}>
       {/* 1. TOP HEADER SECTION */}
@@ -116,7 +122,7 @@ export default function TelemetryPanel({
             title="Toggle Phone Hardware GPS"
           >
             <Radio className={`w-3 h-3 ${useRealGps ? 'text-emerald-400' : 'text-slate-500'}`} />
-            <span>{useRealGps ? '📡 REAL GPS ACTIVE' : '📱 SIM GPS'}</span>
+            <span>{useRealGps ? '📡 REAL GPS' : '📱 SIM GPS'}</span>
           </button>
         </div>
 
@@ -183,19 +189,31 @@ export default function TelemetryPanel({
         </div>
       )}
 
-      {/* ESTIMATED FARE & TIME DISPLAY BADGE */}
-      {destinationLocation && estimatedFare > 0 && (
-        <div className="my-1 p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-between px-3 text-xs font-mono shrink-0 shadow-lg animate-fadeIn">
-          <div className="flex items-center space-x-2 text-[10px] text-slate-300 font-bold">
-            <span className="text-cyan-400 uppercase font-black">DEST:</span>
-            <span className="text-white truncate max-w-[120px]">{destinationLocation.name}</span>
+      {/* 2. SLEEK TRIP ROUTE PROGRESS BAR */}
+      {destinationLocation && (
+        <div className="my-1 p-2 rounded-xl bg-slate-950/80 border border-cyan-500/30 flex flex-col space-y-1 shrink-0 shadow-lg animate-fadeIn">
+          <div className="flex items-center justify-between text-[9px] font-mono font-bold text-slate-300 px-0.5">
+            <div className="flex items-center space-x-1 text-emerald-400 truncate max-w-[45%]">
+              <MapPin className="w-3 h-3 flex-shrink-0 fill-emerald-400" />
+              <span className="truncate">{pickupLocation.name}</span>
+            </div>
+
+            <div className="flex items-center space-x-1 text-cyan-300 font-black">
+              <span>{progressPercent}%</span>
+            </div>
+
+            <div className="flex items-center space-x-1 text-rose-400 truncate max-w-[45%] justify-end">
+              <span className="truncate">{destinationLocation.name}</span>
+              <Flag className="w-3 h-3 flex-shrink-0 fill-rose-400" />
+            </div>
           </div>
 
-          <div className="flex items-center space-x-2 text-[10px]">
-            <span className="text-slate-400">{estimatedDistanceKm.toFixed(2)} KM ({estimatedDurationMins} Mins)</span>
-            <span className="px-2 py-0.5 rounded-lg bg-cyan-500/20 text-cyan-300 font-black border border-cyan-500/40">
-              EST {tariff.currency} {estimatedFare.toLocaleString()}
-            </span>
+          {/* Animated Progress Bar Track */}
+          <div className="w-full h-2 rounded-full bg-slate-900 border border-white/10 relative overflow-hidden">
+            <div
+              style={{ width: `${progressPercent}%` }}
+              className="h-full bg-gradient-to-r from-emerald-400 via-cyan-400 to-teal-300 rounded-full transition-all duration-500 shadow-glow"
+            ></div>
           </div>
         </div>
       )}
@@ -234,7 +252,7 @@ export default function TelemetryPanel({
         </div>
       )}
 
-      {/* 2. MIDDLE HERO HUD TILES */}
+      {/* 3. MIDDLE HERO HUD TILES */}
       <div className="my-1.5 grid grid-cols-12 gap-2 items-stretch shrink-0 max-h-[55%]">
         {/* Left Hero Tile (7 Cols): TOTAL FARE + DISTANCE KM */}
         <div className="col-span-7 p-3 glass-card rounded-2xl border border-cyan-500/30 bg-gradient-to-br from-slate-900/95 via-cyan-950/40 to-slate-900/95 flex flex-col justify-between items-center relative overflow-hidden shadow-2xl">
@@ -245,7 +263,7 @@ export default function TelemetryPanel({
 
           <div className="flex items-baseline space-x-1 my-1">
             <span className="text-lg font-black text-cyan-400">{tariff.currency}</span>
-            <span className="text-6xl sm:text-7xl lg:text-8xl font-black tracking-tighter font-mono glow-cyan leading-none">
+            <span className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tighter font-mono glow-cyan leading-none">
               {totalFare.toLocaleString('en-US')}
             </span>
             <span className="text-sm font-bold text-slate-400">.00</span>
@@ -254,7 +272,7 @@ export default function TelemetryPanel({
           <div className="w-full pt-1.5 border-t border-white/10 flex items-center justify-between px-1">
             <span className="text-[10px] uppercase font-black text-slate-300">Distance</span>
             <div className="flex items-baseline space-x-1">
-              <span className="text-3xl sm:text-4xl lg:text-5xl font-black font-mono glow-green leading-none">{distanceKm.toFixed(2)}</span>
+              <span className="text-2xl sm:text-3xl lg:text-4xl font-black font-mono glow-green leading-none">{distanceKm.toFixed(2)}</span>
               <span className="text-xs font-bold text-emerald-400">KM</span>
             </div>
           </div>
@@ -267,7 +285,7 @@ export default function TelemetryPanel({
               <Clock className="w-3.5 h-3.5 text-cyan-400" />
               <span>Total Time</span>
             </div>
-            <div className="text-2xl sm:text-3xl lg:text-4xl font-black font-mono text-cyan-200 mt-1 leading-none">
+            <div className="text-xl sm:text-2xl lg:text-3xl font-black font-mono text-cyan-200 mt-1 leading-none">
               {formatTime(elapsedSeconds)}
             </div>
           </div>
@@ -277,14 +295,14 @@ export default function TelemetryPanel({
               <Clock className="w-3.5 h-3.5 text-amber-400" />
               <span>Wait Time</span>
             </div>
-            <div className="text-2xl sm:text-3xl lg:text-4xl font-black font-mono glow-amber mt-1 leading-none">
+            <div className="text-xl sm:text-2xl lg:text-3xl font-black font-mono glow-amber mt-1 leading-none">
               {formatTime(waitingSeconds)}
             </div>
           </div>
         </div>
       </div>
 
-      {/* 3. BOTTOM ACTION SECTION */}
+      {/* 4. BOTTOM ACTION SECTION */}
       <div className="pt-2 flex items-center space-x-2 shrink-0">
         <div className="w-[32%] p-2.5 glass-card rounded-2xl border border-cyan-500/40 flex items-center justify-between px-3 shadow-xl">
           <div className="flex items-center space-x-1 text-slate-400">
@@ -292,7 +310,7 @@ export default function TelemetryPanel({
             <span className="text-[10px] uppercase font-black">Speed</span>
           </div>
           <div className="flex items-baseline space-x-0.5">
-            <span className="text-3xl sm:text-4xl font-black font-mono text-cyan-300 leading-none">{currentSpeed}</span>
+            <span className="text-2xl sm:text-3xl font-black font-mono text-cyan-300 leading-none">{currentSpeed}</span>
             <span className="text-[9px] font-bold text-cyan-400">KM/H</span>
           </div>
         </div>
