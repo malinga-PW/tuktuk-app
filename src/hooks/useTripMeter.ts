@@ -1,6 +1,22 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { meterAudio } from '@/utils/audio';
 
+// Valhalla returns encoded polyline with precision=6 (different from Google's precision=5)
+const decodeValhallaPoly = (encoded: string): [number, number][] => {
+  const coords: [number, number][] = [];
+  let idx = 0, lat = 0, lng = 0;
+  while (idx < encoded.length) {
+    let shift = 0, result = 0, byte: number;
+    do { byte = encoded.charCodeAt(idx++) - 63; result |= (byte & 0x1f) << shift; shift += 5; } while (byte >= 0x20);
+    lat += (result & 1) ? ~(result >> 1) : (result >> 1);
+    shift = 0; result = 0;
+    do { byte = encoded.charCodeAt(idx++) - 63; result |= (byte & 0x1f) << shift; shift += 5; } while (byte >= 0x20);
+    lng += (result & 1) ? ~(result >> 1) : (result >> 1);
+    coords.push([lng / 1e6, lat / 1e6]); // [lon, lat]
+  }
+  return coords;
+};
+
 export type TripStatus = 'IDLE' | 'RUNNING' | 'PAUSED' | 'FINISHED';
 
 export interface TariffConfig {
@@ -250,7 +266,7 @@ export function useTripMeter() {
         return { lat: c[1], lng: c[0], heading: getBearing(c[1], c[0], nextC[1], nextC[0]), streetName: label };
       });
 
-    // --- PRIMARY: Valhalla — use_tolls=0, use_highways=0 (genuinely avoids expressways) ---
+    // --- PRIMARY: Valhalla — use_tolls=0, use_highways=0 (avoids Sri Lanka expressways) ---
     try {
       const valhallaBody = {
         locations: [
@@ -260,12 +276,11 @@ export function useTripMeter() {
         costing: 'auto',
         costing_options: {
           auto: {
-            use_tolls:    0.0,   // 0 = strongly avoid toll roads
-            use_highways: 0.0,   // 0 = strongly avoid expressways
+            use_tolls:    0.0,   // strongly avoid toll roads
+            use_highways: 0.0,   // strongly avoid expressways
             use_ferry:    0.0,
           },
         },
-        shape_format: 'geojson',
         directions_options: { units: 'kilometers' },
       };
       const vRes = await fetch('https://valhalla1.openstreetmap.de/route', {
@@ -276,20 +291,27 @@ export function useTripMeter() {
       if (vRes.ok) {
         const vData = await vRes.json();
         const leg = vData?.trip?.legs?.[0];
-        if (leg?.shape?.coordinates?.length > 1) {
-          const distKm  = leg.summary?.length ?? 0;          // already in km
-          const durMins = Math.round((leg.summary?.time ?? 0) / 60);
-          setEstimatedDistanceKm(distKm);
-          setEstimatedDurationMins(durMins);
-          setEstimatedFare(calcEstimatedFare(distKm, tariff));
-          const vPoints = buildRoute(leg.shape.coordinates, 'Local Road (No Toll)');
-          setFullNavPath(vPoints);
-          setRouteIndex(0);
-          setRoutePath([vPoints[0]]);
-          return;
+        const encodedShape = leg?.shape;
+        if (typeof encodedShape === 'string' && encodedShape.length > 0) {
+          const coords = decodeValhallaPoly(encodedShape);
+          if (coords.length > 1) {
+            const distKm  = leg.summary?.length ?? 0;   // km
+            const durMins = Math.round((leg.summary?.time ?? 0) / 60);
+            setEstimatedDistanceKm(distKm);
+            setEstimatedDurationMins(durMins);
+            setEstimatedFare(calcEstimatedFare(distKm, tariff));
+            const vPoints = buildRoute(coords, 'Local Road (No Toll)');
+            setFullNavPath(vPoints);
+            setRouteIndex(0);
+            setRoutePath([vPoints[0]]);
+            console.log('[Valhalla] Route OK — toll-free,', coords.length, 'points,', distKm.toFixed(1), 'km');
+            return;
+          }
         }
+        console.warn('[Valhalla] Unexpected response shape, falling back to OSRM:', vData);
       } else {
-        console.warn('[Valhalla] HTTP error:', vRes.status, '— falling back to OSRM');
+        const errText = await vRes.text().catch(() => '');
+        console.warn('[Valhalla] HTTP', vRes.status, errText, '— falling back to OSRM');
       }
     } catch (err) {
       console.warn('[Valhalla] Failed:', err, '— falling back to OSRM');
