@@ -4,7 +4,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { RoutePoint, LocationItem } from '@/hooks/useTripMeter';
-import { Navigation, Layers, Crosshair, Eye, MapPin, X, CheckCircle2, Target, Loader2, Zap, Clock } from 'lucide-react';
+import { Navigation, Navigation2, Layers, Crosshair, Eye, MapPin, X, CheckCircle2, Target, Loader2, Zap, Clock } from 'lucide-react';
 import { meterAudio } from '@/utils/audio';
 
 // Custom Rotating Vehicle Navigation Arrow Icon
