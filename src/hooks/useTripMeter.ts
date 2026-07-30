@@ -163,6 +163,18 @@ export function useTripMeter() {
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Live refs — keeps interval callback always reading fresh values without restarting the timer
+  const useRealGpsRef         = useRef(useRealGps);
+  const isSimulatingTrafficRef = useRef(isSimulatingTraffic);
+  const currentSpeedRef       = useRef(currentSpeed);
+  const fullNavPathRef        = useRef(fullNavPath);
+  const destinationLocationRef = useRef(destinationLocation);
+  useEffect(() => { useRealGpsRef.current = useRealGps; },          [useRealGps]);
+  useEffect(() => { isSimulatingTrafficRef.current = isSimulatingTraffic; }, [isSimulatingTraffic]);
+  useEffect(() => { currentSpeedRef.current = currentSpeed; },      [currentSpeed]);
+  useEffect(() => { fullNavPathRef.current = fullNavPath; },        [fullNavPath]);
+  useEffect(() => { destinationLocationRef.current = destinationLocation; }, [destinationLocation]);
+
   // Reverse Geocode helper
   const fetchReverseGeocode = useCallback(async (lat: number, lng: number) => {
     const key = `${lat.toFixed(3)},${lng.toFixed(3)}`;
@@ -680,7 +692,8 @@ export function useTripMeter() {
     meterAudio.speak("Destination pinned.");
   };
 
-  // Simulation Loop
+  // Simulation / Timer Loop
+  // Deps: status ONLY — all other values read via live refs to prevent timer restart on every GPS tick
   useEffect(() => {
     if (status !== 'RUNNING' && status !== 'PAUSED') {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -690,60 +703,51 @@ export function useTripMeter() {
     timerRef.current = setInterval(() => {
       setElapsedSeconds((prev) => prev + 1);
 
-      // Wait time logic:
-      // Real GPS mode → only count wait when driver explicitly PAUSED (speed=0 from GPS is unreliable)
-      // Simulation mode → count wait when traffic jam simulated OR speed is 0
+      // Wait time: real GPS → only when PAUSED; sim → when stopped/traffic jam
       const isWaiting = status === 'PAUSED' ||
-        (!useRealGps && (currentSpeed === 0 || isSimulatingTraffic));
-      if (isWaiting) {
-        setWaitingSeconds((prev) => prev + 1);
-      }
+        (!useRealGpsRef.current && (currentSpeedRef.current === 0 || isSimulatingTrafficRef.current));
+      if (isWaiting) setWaitingSeconds((prev) => prev + 1);
 
-      if (status === 'RUNNING' && !useRealGps) {
-        if (!isSimulatingTraffic) {
-          const simSpeed = Math.floor(25 + Math.random() * 20);
-          setCurrentSpeed(simSpeed);
+      if (status === 'RUNNING' && !useRealGpsRef.current && !isSimulatingTrafficRef.current) {
+        const simSpeed = Math.floor(25 + Math.random() * 20);
+        setCurrentSpeed(simSpeed);
+        currentSpeedRef.current = simSpeed; // update ref immediately so next tick sees it
 
-          const addKm = simSpeed / 3600;
-          setDistanceKm((prev) => {
-            const nextVal = prev + addKm;
-            const currentKmFloor = Math.floor(nextVal);
-            if (currentKmFloor > lastAnnouncedKmRef.current && currentKmFloor >= 1) {
-              lastAnnouncedKmRef.current = currentKmFloor;
-              meterAudio.speak(`${currentKmFloor} kilometer completed.`);
-            }
-            if (Math.floor(nextVal * 10) > Math.floor(prev * 10)) {
-              meterAudio.playTick();
-            }
-            return nextVal;
-          });
-
-          if (destinationLocation && fullNavPath.length > 1) {
-            setRouteIndex((prevIdx) => {
-              const nextIdx = prevIdx + 1;
-              if (nextIdx >= fullNavPath.length) {
-                setStatus('FINISHED');
-                setCurrentSpeed(0);
-                meterAudio.playStopChime();
-                meterAudio.speak("Arrived at destination.");
-                return prevIdx;
-              }
-              const newPoint = fullNavPath[nextIdx];
-              if (newPoint.heading !== undefined) {
-                setVehicleHeading(newPoint.heading);
-              }
-              setRoutePath((prevPath) => [...prevPath, newPoint]);
-              return nextIdx;
-            });
+        const addKm = simSpeed / 3600;
+        setDistanceKm((prev) => {
+          const nextVal = prev + addKm;
+          const currentKmFloor = Math.floor(nextVal);
+          if (currentKmFloor > lastAnnouncedKmRef.current && currentKmFloor >= 1) {
+            lastAnnouncedKmRef.current = currentKmFloor;
+            meterAudio.speak(`${currentKmFloor} kilometer completed.`);
           }
+          if (Math.floor(nextVal * 10) > Math.floor(prev * 10)) meterAudio.playTick();
+          return nextVal;
+        });
+
+        const navPath = fullNavPathRef.current;
+        const dest    = destinationLocationRef.current;
+        if (dest && navPath.length > 1) {
+          setRouteIndex((prevIdx) => {
+            const nextIdx = prevIdx + 1;
+            if (nextIdx >= navPath.length) {
+              setStatus('FINISHED');
+              setCurrentSpeed(0);
+              meterAudio.playStopChime();
+              meterAudio.speak('Arrived at destination.');
+              return prevIdx;
+            }
+            const newPoint = navPath[nextIdx];
+            if (newPoint.heading !== undefined) setVehicleHeading(newPoint.heading);
+            setRoutePath((prevPath) => [...prevPath, newPoint]);
+            return nextIdx;
+          });
         }
       }
     }, 1000);
 
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [status, isSimulatingTraffic, fullNavPath, useRealGps, destinationLocation, currentSpeed]);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [status]); // status only — no more timer restarts on GPS updates
 
   const currentPosition = routePath[routePath.length - 1] || pickupLocation;
 
