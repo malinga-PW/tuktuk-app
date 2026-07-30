@@ -170,7 +170,9 @@ export function useTripMeter() {
     lastReverseGeocodedRef.current = key;
 
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16`);
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16`, {
+        headers: { 'User-Agent': 'TukTukMeterApp/1.0 (https://github.com/malinga-PW/tuktuk-app)' },
+      });
       if (res.ok) {
         const data = await res.json();
         if (data && data.display_name) {
@@ -513,7 +515,8 @@ export function useTripMeter() {
       }).catch(() => {});
 
       const nominatimPromise = fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query + ' Sri Lanka')}&countrycodes=lk&limit=8`
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query + ' Sri Lanka')}&countrycodes=lk&limit=8`,
+        { headers: { 'User-Agent': 'TukTukMeterApp/1.0 (https://github.com/malinga-PW/tuktuk-app)' } }
       ).then(async (res) => {
         if (res.ok) {
           const data = await res.json();
