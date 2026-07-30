@@ -77,8 +77,8 @@ export default function Home() {
 
   return (
     <main className="w-screen h-screen p-1 md:p-2 flex flex-col sm:flex-row justify-between overflow-hidden bg-slate-950 text-white space-y-1 sm:space-y-0 sm:space-x-2">
-      {/* Map Section: Top in Portrait (45vh), Left in Landscape (Full Height Aspect-Square) */}
-      <section className="w-full sm:w-auto h-[44vh] sm:h-full sm:aspect-square shrink-0 relative overflow-hidden bg-slate-950 rounded-2xl">
+      {/* Map Section: 20% Height Increase in Portrait mode (58vh), Left in Landscape (Full Height Aspect-Square) */}
+      <section className="w-full sm:w-auto h-[58vh] sm:h-full sm:aspect-square shrink-0 relative overflow-hidden bg-slate-950 rounded-2xl">
         <InteractiveMap
           status={status}
           currentPosition={currentPosition}
@@ -124,8 +124,8 @@ export default function Home() {
         />
       </section>
 
-      {/* Telemetry Section: Bottom in Portrait (56vh), Right in Landscape (Flex 1 Full Height) */}
-      <section className="w-full sm:flex-1 h-[55vh] sm:h-full min-w-0 flex flex-col overflow-hidden">
+      {/* Telemetry Section: Bottom in Portrait (41vh), Right in Landscape (Flex 1 Full Height) */}
+      <section className="w-full sm:flex-1 h-[41vh] sm:h-full min-w-0 flex flex-col overflow-hidden">
         <TelemetryPanel
           status={status}
           distanceKm={distanceKm}

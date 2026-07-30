@@ -4,7 +4,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { RoutePoint, LocationItem, TripStatus } from '@/hooks/useTripMeter';
-import { Navigation, Navigation2, Layers, Crosshair, Eye, MapPin, X, CheckCircle2, Target, Loader2, Zap, Clock } from 'lucide-react';
+import { Navigation, Navigation2, Layers, Crosshair, Eye, MapPin, X, CheckCircle2, Target, Loader2 } from 'lucide-react';
 import { meterAudio } from '@/utils/audio';
 
 // Custom Rotating Vehicle Navigation Arrow Icon
@@ -153,10 +153,6 @@ export default function InteractiveMap({
   vehicleHeading = 0,
   tileStyle,
   destinationLocation,
-  estimatedDistanceKm = 0,
-  estimatedDurationMins = 0,
-  estimatedFare = 0,
-  currency = 'LKR',
   isPinpointDraggingMode,
   searchResults,
   isSearchingPlaces,
@@ -363,30 +359,6 @@ export default function InteractiveMap({
             <span className="hidden sm:inline">{isPinpointDraggingMode ? 'PINNING' : 'DRAG PIN'}</span>
           </button>
         </div>
-
-        {/* ESTIMATED FARE & TIME LIVE HUD BADGE OVERLAY ON MAP */}
-        {destinationLocation && estimatedFare > 0 && (
-          <div className="p-1.5 glass-panel rounded-xl border border-cyan-500/50 bg-slate-950/95 flex items-center justify-between px-2.5 shadow-2xl animate-fadeIn">
-            <div className="flex items-center space-x-2 text-[10px] font-mono text-slate-300">
-              <span className="flex items-center space-x-1">
-                <Navigation2 className="w-3 h-3 text-emerald-400" />
-                <span className="font-bold text-emerald-300">{estimatedDistanceKm.toFixed(2)} KM</span>
-              </span>
-              <span>•</span>
-              <span className="flex items-center space-x-1">
-                <Clock className="w-3 h-3 text-cyan-400" />
-                <span className="font-bold text-cyan-200">{estimatedDurationMins} MINS</span>
-              </span>
-            </div>
-
-            <div className="flex items-center space-x-1">
-              <span className="text-[9px] uppercase font-black text-amber-400">EST FARE:</span>
-              <span className="text-xs font-black font-mono text-cyan-300 glow-cyan">
-                {currency} {estimatedFare.toLocaleString()}
-              </span>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Floating Map Layers Button */}

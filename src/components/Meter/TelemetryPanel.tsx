@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { TripStatus, TariffConfig, LocationItem } from '@/hooks/useTripMeter';
-import { Play, Pause, Square, RotateCcw, Settings, Receipt, Volume2, VolumeX, Zap, Sliders, ShieldAlert, Radio, Clock, Gauge, Maximize, Minimize, History, Navigation2, MapPin, Flag } from 'lucide-react';
+import { Play, Pause, Square, RotateCcw, Settings, Receipt, Volume2, VolumeX, Zap, Sliders, ShieldAlert, Radio, Clock, Gauge, Maximize, Minimize, History, MapPin, Flag } from 'lucide-react';
 
 interface TelemetryPanelProps {
   status: TripStatus;
@@ -102,6 +102,13 @@ export default function TelemetryPanel({
     onUpdateTariff((prev) => ({ ...prev, waitRatePerMin: Math.max(0, prev.waitRatePerMin + delta) }));
   };
 
+  // Determine whether to display temporary estimates or live meter reads
+  const isPreTripEstimate = status === 'IDLE' && destinationLocation !== null && estimatedFare > 0;
+
+  const displayFare = isPreTripEstimate ? estimatedFare : totalFare;
+  const displayDistance = isPreTripEstimate ? estimatedDistanceKm : distanceKm;
+  const displayTimeText = isPreTripEstimate ? `${estimatedDurationMins} Mins` : formatTime(elapsedSeconds);
+
   // Calculate live trip progress percentage
   const progressPercent = estimatedDistanceKm > 0
     ? Math.min(100, Math.max(0, Math.round((distanceKm / estimatedDistanceKm) * 100)))
@@ -199,7 +206,7 @@ export default function TelemetryPanel({
             </div>
 
             <div className="flex items-center space-x-1 text-cyan-300 font-black">
-              <span>{progressPercent}%</span>
+              <span>{status === 'IDLE' ? 'ESTIMATE MODE' : `${progressPercent}%`}</span>
             </div>
 
             <div className="flex items-center space-x-1 text-rose-400 truncate max-w-[45%] justify-end">
@@ -208,11 +215,10 @@ export default function TelemetryPanel({
             </div>
           </div>
 
-          {/* Animated Progress Bar Track */}
           <div className="w-full h-2 rounded-full bg-slate-900 border border-white/10 relative overflow-hidden">
             <div
-              style={{ width: `${progressPercent}%` }}
-              className="h-full bg-gradient-to-r from-emerald-400 via-cyan-400 to-teal-300 rounded-full transition-all duration-500 shadow-glow"
+              style={{ width: status === 'IDLE' ? '100%' : `${progressPercent}%` }}
+              className={`h-full ${status === 'IDLE' ? 'bg-cyan-500/40 animate-pulse' : 'bg-gradient-to-r from-emerald-400 via-cyan-400 to-teal-300'} rounded-full transition-all duration-500 shadow-glow`}
             ></div>
           </div>
         </div>
@@ -252,27 +258,37 @@ export default function TelemetryPanel({
         </div>
       )}
 
-      {/* 3. MIDDLE HERO HUD TILES */}
+      {/* 3. MIDDLE HERO HUD TILES (Temporarily Displays Estimates before Start Ride, then Switches to Live Reads) */}
       <div className="my-1.5 grid grid-cols-12 gap-2 items-stretch shrink-0 max-h-[55%]">
         {/* Left Hero Tile (7 Cols): TOTAL FARE + DISTANCE KM */}
         <div className="col-span-7 p-3 glass-card rounded-2xl border border-cyan-500/30 bg-gradient-to-br from-slate-900/95 via-cyan-950/40 to-slate-900/95 flex flex-col justify-between items-center relative overflow-hidden shadow-2xl">
-          <div className="text-[10px] uppercase tracking-widest font-black text-cyan-300 flex items-center space-x-1">
-            <Zap className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
-            <span>TOTAL FARE ({tariff.currency})</span>
+          <div className="w-full flex items-center justify-between text-[10px] uppercase tracking-widest font-black text-cyan-300">
+            <div className="flex items-center space-x-1">
+              <Zap className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+              <span>TOTAL FARE ({tariff.currency})</span>
+            </div>
+            {isPreTripEstimate && (
+              <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-400 text-[8px] border border-amber-500/40 font-mono animate-pulse">
+                ESTIMATE
+              </span>
+            )}
           </div>
 
           <div className="flex items-baseline space-x-1 my-1">
             <span className="text-lg font-black text-cyan-400">{tariff.currency}</span>
             <span className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tighter font-mono glow-cyan leading-none">
-              {totalFare.toLocaleString('en-US')}
+              {displayFare.toLocaleString('en-US')}
             </span>
             <span className="text-sm font-bold text-slate-400">.00</span>
           </div>
 
           <div className="w-full pt-1.5 border-t border-white/10 flex items-center justify-between px-1">
-            <span className="text-[10px] uppercase font-black text-slate-300">Distance</span>
+            <span className="text-[10px] uppercase font-black text-slate-300 flex items-center space-x-1">
+              <span>Distance</span>
+              {isPreTripEstimate && <span className="text-[8px] text-amber-400">(Est)</span>}
+            </span>
             <div className="flex items-baseline space-x-1">
-              <span className="text-2xl sm:text-3xl lg:text-4xl font-black font-mono glow-green leading-none">{distanceKm.toFixed(2)}</span>
+              <span className="text-2xl sm:text-3xl lg:text-4xl font-black font-mono glow-green leading-none">{displayDistance.toFixed(2)}</span>
               <span className="text-xs font-bold text-emerald-400">KM</span>
             </div>
           </div>
@@ -280,13 +296,13 @@ export default function TelemetryPanel({
 
         {/* Right Hero Stack (5 Cols): TOTAL TIME & WAIT TIME */}
         <div className="col-span-5 grid grid-rows-2 gap-2">
-          <div className="p-2.5 glass-card rounded-2xl border border-white/10 flex flex-col justify-center items-center shadow-lg">
+          <div className="p-2.5 glass-card rounded-2xl border border-white/10 flex flex-col justify-center items-center shadow-lg relative">
             <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1">
               <Clock className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Total Time</span>
+              <span>{isPreTripEstimate ? 'Est. Time' : 'Total Time'}</span>
             </div>
             <div className="text-xl sm:text-2xl lg:text-3xl font-black font-mono text-cyan-200 mt-1 leading-none">
-              {formatTime(elapsedSeconds)}
+              {displayTimeText}
             </div>
           </div>
 
