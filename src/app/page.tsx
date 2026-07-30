@@ -7,7 +7,7 @@ import TelemetryPanel from '@/components/Meter/TelemetryPanel';
 import TariffSettingsModal from '@/components/Meter/TariffSettingsModal';
 import ReceiptModal from '@/components/Meter/ReceiptModal';
 import WindshieldMirrorMode from '@/components/HUD/WindshieldMirrorMode';
-import { Compass, Sparkles } from 'lucide-react';
+import { Compass, Sparkles, Maximize, Minimize } from 'lucide-react';
 
 const InteractiveMap = dynamic(() => import('@/components/Map/InteractiveMap'), {
   ssr: false,
@@ -67,6 +67,20 @@ export default function Home() {
 
   const [isTariffModalOpen, setIsTariffModalOpen] = useState(false);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Fullscreen API toggle handler
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+      setIsFullscreen(true);
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      }
+      setIsFullscreen(false);
+    }
+  };
 
   return (
     <main className="w-screen h-screen p-2 md:p-3 flex flex-col justify-between overflow-hidden bg-slate-950 text-white">
@@ -99,14 +113,23 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Right Info Badge */}
+        {/* Right Info & Fullscreen Toggle Button */}
         <div className="text-[11px] font-mono text-slate-400 flex items-center space-x-2">
+          <button
+            onClick={toggleFullscreen}
+            className="px-2.5 py-1 rounded-lg glass-card border border-white/15 hover:border-cyan-400 text-cyan-300 text-[10px] font-extrabold flex items-center space-x-1 transition-all"
+            title="Toggle Mobile Fullscreen Mode"
+          >
+            {isFullscreen ? <Minimize className="w-3 h-3 text-amber-400" /> : <Maximize className="w-3 h-3 text-cyan-400" />}
+            <span>{isFullscreen ? 'EXIT FULLSCREEN' : '📺 FULLSCREEN'}</span>
+          </button>
+
           <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
-          <span>1:1 SCALE MAP</span>
+          <span className="hidden sm:inline">1:1 SCALE MAP</span>
         </div>
       </header>
 
-      {/* Landscape Split Grid: Left Map (60%) & Right Telemetry (40%) */}
+      {/* Landscape Split Grid */}
       <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-3 min-h-0 overflow-hidden">
         {/* Left Panel: 1:1 Scale Map */}
         <section className="md:col-span-7 h-full w-full relative">

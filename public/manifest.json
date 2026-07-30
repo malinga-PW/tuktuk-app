@@ -1,0 +1,17 @@
+{
+  "name": "TukTuk Meter & GPS Navigation",
+  "short_name": "TukTuk Go",
+  "description": "1:1 Scale GPS Map & Live TukTuk Fare Meter Dashboard",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#07090e",
+  "theme_color": "#07090e",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
