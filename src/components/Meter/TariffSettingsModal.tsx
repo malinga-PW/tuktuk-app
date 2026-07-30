@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TariffConfig } from '@/hooks/useTripMeter';
-import { X, DollarSign, Save, RotateCcw, Check } from 'lucide-react';
+import { X, Settings, Moon, Zap, Save, Check } from 'lucide-react';
 
 interface TariffSettingsModalProps {
   isOpen: boolean;
@@ -17,211 +17,120 @@ export default function TariffSettingsModal({
   onClose,
   onSave,
 }: TariffSettingsModalProps) {
-  const [form, setForm] = useState<TariffConfig>(tariff);
+  const [localTariff, setLocalTariff] = useState<TariffConfig>(tariff);
+
+  useEffect(() => {
+    setLocalTariff(tariff);
+  }, [tariff]);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSave(form);
+  const handleSave = () => {
+    onSave(localTariff);
     onClose();
   };
 
-  const handleResetDefaults = () => {
-    const defaults: TariffConfig = {
-      currency: 'LKR',
-      baseFare: 120,
-      baseKmIncluded: 1.0,
-      ratePerKm: 100,
-      waitRatePerMin: 6,
-      isNightTariff: false,
-      nightMultiplier: 1.2,
-      acSurcharge: 50,
-      luggageSurcharge: 100,
-      isAcEnabled: false,
-      isLuggageEnabled: false,
-    };
-    setForm(defaults);
-  };
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
-      <div className="w-full max-w-lg glass-panel rounded-3xl border border-white/15 p-6 shadow-2xl relative overflow-hidden">
-        {/* Top Header */}
-        <div className="flex items-center justify-between pb-4 mb-4 border-b border-white/10">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-3 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
+      <div className="w-full max-w-xl max-h-[94vh] overflow-y-auto glass-panel rounded-2xl border border-cyan-500/30 p-3 sm:p-4 shadow-2xl my-auto flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between pb-2 border-b border-white/10 shrink-0">
           <div className="flex items-center space-x-2">
-            <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
-              <DollarSign className="w-5 h-5" />
+            <div className="w-7 h-7 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
+              <Settings className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-lg font-black tracking-tight text-white">Tariff Rate Settings</h2>
-              <p className="text-xs text-slate-400">Configure base fares, per KM rates & wait time charges</p>
+              <h2 className="text-xs sm:text-sm font-black text-white uppercase tracking-wider">TARIFF RATES & FARE CONFIG</h2>
+              <p className="text-[9px] text-slate-400 font-mono">Custom rates for Meter calculation</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl glass-card text-slate-400 hover:text-white transition-all"
+            className="p-1 glass-card rounded-xl text-slate-400 hover:text-white"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Form Controls */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            {/* Currency Selector */}
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                Currency Symbol
-              </label>
-              <select
-                value={form.currency}
-                onChange={(e) => setForm({ ...form, currency: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl glass-card border border-white/10 text-white font-mono text-sm focus:outline-none focus:border-cyan-500"
-              >
-                <option value="LKR" className="bg-slate-900">LKR (Rs)</option>
-                <option value="USD" className="bg-slate-900">USD ($)</option>
-                <option value="EUR" className="bg-slate-900">EUR (€)</option>
-                <option value="INR" className="bg-slate-900">INR (₹)</option>
-              </select>
-            </div>
-
-            {/* Base Fare */}
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                Base Minimum Fare ({form.currency})
-              </label>
+        {/* 2-Column Grid Layout for Mobile Landscape */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 my-2 overflow-y-auto pr-1">
+          {/* Base Minimum Fare */}
+          <div className="p-2 glass-card rounded-xl border border-white/10 space-y-1">
+            <label className="text-[9px] font-bold text-slate-300 uppercase block">Base Minimum Fare ({localTariff.currency})</label>
+            <div className="flex items-center space-x-1.5">
               <input
                 type="number"
-                min="0"
-                value={form.baseFare}
-                onChange={(e) => setForm({ ...form, baseFare: Number(e.target.value) })}
-                className="w-full px-3 py-2 rounded-xl glass-card border border-white/10 text-white font-mono text-sm focus:outline-none focus:border-cyan-500"
+                value={localTariff.baseFare}
+                onChange={(e) => setLocalTariff({ ...localTariff, baseFare: Math.max(0, Number(e.target.value)) })}
+                className="w-full bg-slate-950/80 border border-white/15 px-2 py-1 rounded-lg text-xs font-mono font-bold text-cyan-300 focus:outline-none focus:border-cyan-400"
               />
             </div>
+            <span className="text-[8px] text-slate-400">First {localTariff.baseKmIncluded} KM included</span>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            {/* Base Included Distance */}
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                Base Included KM
-              </label>
+          {/* Rate Per KM */}
+          <div className="p-2 glass-card rounded-xl border border-white/10 space-y-1">
+            <label className="text-[9px] font-bold text-slate-300 uppercase block">Per KM Rate ({localTariff.currency})</label>
+            <div className="flex items-center space-x-1.5">
               <input
                 type="number"
-                step="0.1"
-                min="0"
-                value={form.baseKmIncluded}
-                onChange={(e) => setForm({ ...form, baseKmIncluded: Number(e.target.value) })}
-                className="w-full px-3 py-2 rounded-xl glass-card border border-white/10 text-white font-mono text-sm focus:outline-none focus:border-cyan-500"
+                value={localTariff.ratePerKm}
+                onChange={(e) => setLocalTariff({ ...localTariff, ratePerKm: Math.max(0, Number(e.target.value)) })}
+                className="w-full bg-slate-950/80 border border-white/15 px-2 py-1 rounded-lg text-xs font-mono font-bold text-cyan-300 focus:outline-none focus:border-cyan-400"
               />
             </div>
-
-            {/* Rate Per KM */}
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                Rate per Additional KM
-              </label>
-              <input
-                type="number"
-                min="0"
-                value={form.ratePerKm}
-                onChange={(e) => setForm({ ...form, ratePerKm: Number(e.target.value) })}
-                className="w-full px-3 py-2 rounded-xl glass-card border border-white/10 text-white font-mono text-sm focus:outline-none focus:border-cyan-500"
-              />
-            </div>
+            <span className="text-[8px] text-slate-400">Rate charged after initial 1 KM</span>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            {/* Wait Rate Per Min */}
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                Wait Charge ({form.currency}/Min)
-              </label>
+          {/* Waiting Rate */}
+          <div className="p-2 glass-card rounded-xl border border-white/10 space-y-1">
+            <label className="text-[9px] font-bold text-slate-300 uppercase block">Wait Rate Per Min ({localTariff.currency})</label>
+            <div className="flex items-center space-x-1.5">
               <input
                 type="number"
-                min="0"
-                value={form.waitRatePerMin}
-                onChange={(e) => setForm({ ...form, waitRatePerMin: Number(e.target.value) })}
-                className="w-full px-3 py-2 rounded-xl glass-card border border-white/10 text-white font-mono text-sm focus:outline-none focus:border-cyan-500"
+                value={localTariff.waitRatePerMin}
+                onChange={(e) => setLocalTariff({ ...localTariff, waitRatePerMin: Math.max(0, Number(e.target.value)) })}
+                className="w-full bg-slate-950/80 border border-white/15 px-2 py-1 rounded-lg text-xs font-mono font-bold text-amber-300 focus:outline-none focus:border-amber-400"
               />
             </div>
-
-            {/* Night Surcharge % */}
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                Night Multiplier
-              </label>
-              <input
-                type="number"
-                step="0.05"
-                min="1.0"
-                value={form.nightMultiplier}
-                onChange={(e) => setForm({ ...form, nightMultiplier: Number(e.target.value) })}
-                className="w-full px-3 py-2 rounded-xl glass-card border border-white/10 text-white font-mono text-sm focus:outline-none focus:border-cyan-500"
-              />
-            </div>
+            <span className="text-[8px] text-slate-400">Traffic / Idle waiting time</span>
           </div>
 
-          {/* Quick Presets */}
-          <div className="pt-2">
-            <span className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-              Sri Lankan City Presets
-            </span>
-            <div className="flex items-center space-x-2">
-              <button
-                type="button"
-                onClick={() => setForm({ ...form, baseFare: 120, ratePerKm: 100, waitRatePerMin: 6 })}
-                className="flex-1 py-1.5 px-3 rounded-xl glass-card border border-white/10 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/20 transition-all"
-              >
-                Colombo Meter
-              </button>
-              <button
-                type="button"
-                onClick={() => setForm({ ...form, baseFare: 150, ratePerKm: 120, waitRatePerMin: 8 })}
-                className="flex-1 py-1.5 px-3 rounded-xl glass-card border border-white/10 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20 transition-all"
-              >
-                Kandy City
-              </button>
-              <button
-                type="button"
-                onClick={() => setForm({ ...form, baseFare: 100, ratePerKm: 90, waitRatePerMin: 5 })}
-                className="flex-1 py-1.5 px-3 rounded-xl glass-card border border-white/10 text-xs font-semibold text-amber-300 hover:bg-amber-500/20 transition-all"
-              >
-                Galle Coastal
-              </button>
+          {/* Night Tariff Toggle */}
+          <div className="p-2 glass-card rounded-xl border border-white/10 flex items-center justify-between">
+            <div className="flex items-center space-x-1.5">
+              <Moon className="w-3.5 h-3.5 text-indigo-400" />
+              <div>
+                <span className="text-[9px] font-bold text-white block">Night Tariff (+20%)</span>
+                <span className="text-[8px] text-slate-400">10 PM - 5 AM Night rate</span>
+              </div>
             </div>
-          </div>
-
-          {/* Modal Footer Buttons */}
-          <div className="pt-4 flex items-center justify-between space-x-3 border-t border-white/10">
             <button
-              type="button"
-              onClick={handleResetDefaults}
-              className="py-2.5 px-4 rounded-xl glass-card text-slate-400 hover:text-white text-xs font-bold flex items-center space-x-1.5 transition-all"
+              onClick={() => setLocalTariff({ ...localTariff, isNightTariff: !localTariff.isNightTariff })}
+              className={`w-9 h-5 rounded-full transition-all relative ${localTariff.isNightTariff ? 'bg-indigo-500' : 'bg-slate-700'}`}
             >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Reset Defaults</span>
+              <span className={`w-3.5 h-3.5 rounded-full bg-white absolute top-0.75 transition-all ${localTariff.isNightTariff ? 'right-0.75' : 'left-0.75'}`}></span>
             </button>
-
-            <div className="flex items-center space-x-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="py-2.5 px-4 rounded-xl glass-card text-slate-300 hover:text-white text-xs font-bold transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="py-2.5 px-5 rounded-xl bg-cyan-500 text-slate-950 text-xs font-black uppercase tracking-wider flex items-center space-x-1.5 shadow-lg shadow-cyan-500/30 hover:bg-cyan-400 transition-all"
-              >
-                <Save className="w-4 h-4" />
-                <span>Save Rates</span>
-              </button>
-            </div>
           </div>
-        </form>
+        </div>
+
+        {/* Footer Actions */}
+        <div className="pt-2 border-t border-white/10 flex items-center justify-end space-x-2 shrink-0">
+          <button
+            onClick={onClose}
+            className="px-3 py-1.5 rounded-xl glass-card text-slate-400 text-xs font-bold hover:text-white"
+          >
+            CANCEL
+          </button>
+
+          <button
+            onClick={handleSave}
+            className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black text-xs uppercase flex items-center space-x-1 shadow-lg shadow-amber-500/30"
+          >
+            <Check className="w-3.5 h-3.5" />
+            <span>SAVE TARIFF</span>
+          </button>
+        </div>
       </div>
     </div>
   );
