@@ -211,13 +211,14 @@ export default function InteractiveMap({
   }, [destinationLocation]);
 
   useEffect(() => {
+    if (!isSearchOpen) return; // Don't search when dropdown is closed (e.g. after selecting a result)
     const timer = setTimeout(() => {
       if (searchQuery.trim().length >= 2) {
         onSearchPlaces(searchQuery);
       }
     }, 350);
     return () => clearTimeout(timer);
-  }, [searchQuery, onSearchPlaces]);
+  }, [searchQuery, onSearchPlaces, isSearchOpen]);
 
   const getTileUrl = () => {
     switch (tileStyle) {

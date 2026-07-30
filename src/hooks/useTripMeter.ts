@@ -112,7 +112,7 @@ export function useTripMeter() {
   const watchIdRef = useRef<number | null>(null);
   const wakeLockRef = useRef<unknown | null>(null);
   const lastAnnouncedKmRef = useRef<number>(0);
-  const prevCoordsRef = useRef<{ lat: number, lng: number } | null>(null);
+  const prevCoordsRef = useRef<{ lat: number; lng: number; ts?: number } | null>(null);
   const lastReverseGeocodedRef = useRef<string>('');
 
   // Locations state
@@ -477,7 +477,7 @@ export function useTripMeter() {
         navigator.geolocation.clearWatch(watchIdRef.current);
       }
     };
-  }, [useRealGps, status, fetchReverseGeocode]);
+  }, [useRealGps, fetchReverseGeocode]); // NOTE: status intentionally excluded — GPS watcher must not restart on every trip status change
 
   // Multi-Engine Search
   const searchPlaces = useCallback(async (query: string) => {
@@ -551,11 +551,13 @@ export function useTripMeter() {
     }
   }, []);
 
-  const toggleMute = () => {
-    const next = !isAudioMuted;
-    setIsAudioMuted(next);
-    meterAudio.setMuted(next);
-  };
+  const toggleMute = useCallback(() => {
+    setIsAudioMuted((prev) => {
+      const next = !prev;
+      meterAudio.setMuted(next);
+      return next;
+    });
+  }, []);
 
   const calculateFare = useCallback(() => {
     const { baseFare, baseKmIncluded, ratePerKm, waitRatePerMin, isNightTariff, nightMultiplier, isAcEnabled, acSurcharge, isLuggageEnabled, luggageSurcharge } = tariff;
@@ -641,6 +643,8 @@ export function useTripMeter() {
     setRouteIndex(0);
     lastAnnouncedKmRef.current = 0;
     setRoutePath([pickupLocation]);
+    // Also clear the nav route line so cyan path disappears on map after reset
+    setFullNavPath([{ lat: pickupLocation.lat, lng: pickupLocation.lng, heading: vehicleHeading }]);
   };
 
   const clearAllTripData = () => {
