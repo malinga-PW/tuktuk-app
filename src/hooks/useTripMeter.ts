@@ -690,7 +690,12 @@ export function useTripMeter() {
     timerRef.current = setInterval(() => {
       setElapsedSeconds((prev) => prev + 1);
 
-      if (status === 'PAUSED' || currentSpeed === 0 || isSimulatingTraffic) {
+      // Wait time logic:
+      // Real GPS mode → only count wait when driver explicitly PAUSED (speed=0 from GPS is unreliable)
+      // Simulation mode → count wait when traffic jam simulated OR speed is 0
+      const isWaiting = status === 'PAUSED' ||
+        (!useRealGps && (currentSpeed === 0 || isSimulatingTraffic));
+      if (isWaiting) {
         setWaitingSeconds((prev) => prev + 1);
       }
 
