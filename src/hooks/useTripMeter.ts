@@ -67,7 +67,7 @@ export function useTripMeter() {
   const watchIdRef = useRef<number | null>(null);
   const wakeLockRef = useRef<unknown | null>(null);
 
-  // Locations state (No hardcoded destination by default)
+  // Locations state
   const [pickupLocation, setPickupLocation] = useState<LocationItem>(INITIAL_REAL_GPS_PICKUP);
   const [destinationLocation, setDestinationLocation] = useState<LocationItem | null>(null);
   const [isPinpointDraggingMode, setIsPinpointDraggingMode] = useState<boolean>(false);
@@ -145,7 +145,7 @@ export function useTripMeter() {
     }
   }, []);
 
-  // OSRM Real-Road Routing Engine (only called if destination exists)
+  // OSRM Real-Road Routing Engine
   const fetchOsrmRoute = useCallback(async (start: { lat: number, lng: number }, end: { lat: number, lng: number }) => {
     try {
       const url = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`;
@@ -443,6 +443,8 @@ export function useTripMeter() {
     mapCenterCoords,
     avoidTolls,
     routeType,
+    useRealGps,
+    gpsError,
     searchResults,
     isSearchingPlaces,
     searchPlaces,
