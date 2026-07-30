@@ -241,16 +241,16 @@ export function useTripMeter() {
     return Math.round(total);
   }, []);
 
-  // OSRM Real-Road Routing Engine (Strict Expressway & Toll Avoidance Enabled)
+  // OSRM Real-Road Routing Engine
+  // NOTE: The public OSRM demo server does NOT support &exclude=toll,motorway.
+  // Removing that parameter so road-following routes are returned correctly.
   const fetchOsrmRoute = useCallback(async (start: { lat: number, lng: number }, end: { lat: number, lng: number }) => {
     try {
-      // Exclude expressways (motorway) and tolls strictly for Sri Lankan TukTuks
-      const excludeParam = avoidTolls ? '&exclude=toll,motorway' : '';
-      const url = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson${excludeParam}`;
+      const url = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson&steps=true`;
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
-        if (data.routes && data.routes[0]) {
+        if (data.code === 'Ok' && data.routes && data.routes[0]) {
           const route = data.routes[0];
           const distKm = route.distance / 1000;
           const durMins = Math.round(route.duration / 60);
@@ -258,7 +258,7 @@ export function useTripMeter() {
           setEstimatedDurationMins(durMins);
           setEstimatedFare(calcEstimatedFare(distKm, tariff));
 
-          if (route.geometry && route.geometry.coordinates) {
+          if (route.geometry && route.geometry.coordinates && route.geometry.coordinates.length > 1) {
             const coords = route.geometry.coordinates;
             const osrmPoints: RoutePoint[] = coords.map((c: [number, number], idx: number) => {
               const nextC = coords[idx + 1] || c;
@@ -267,7 +267,7 @@ export function useTripMeter() {
                 lat: c[1],
                 lng: c[0],
                 heading: h,
-                streetName: "Sri Lanka Local Road Route (No Highway)",
+                streetName: "Sri Lanka Road",
               };
             });
             setFullNavPath(osrmPoints);
@@ -275,12 +275,17 @@ export function useTripMeter() {
             setRoutePath([osrmPoints[0]]);
             return;
           }
+        } else {
+          console.error('[OSRM] Route error:', data.code, data.message);
         }
+      } else {
+        console.error('[OSRM] HTTP error:', res.status, await res.text());
       }
-    } catch {
-      // Fallback
+    } catch (err) {
+      console.error('[OSRM] Fetch failed:', err);
     }
 
+    // Straight-line fallback (only used if OSRM completely unreachable)
     const fallbackDist = getHaversineDistance(start.lat, start.lng, end.lat, end.lng);
     setEstimatedDistanceKm(fallbackDist);
     setEstimatedDurationMins(Math.round((fallbackDist / 25) * 60));
@@ -290,7 +295,7 @@ export function useTripMeter() {
       { lat: start.lat, lng: start.lng, heading: 0 },
       { lat: end.lat, lng: end.lng, heading: 0 },
     ]);
-  }, [tariff, calcEstimatedFare, avoidTolls]);
+  }, [tariff, calcEstimatedFare]);
 
   // Fetch OSRM Route only when destination or tolls option changes
   useEffect(() => {
@@ -302,7 +307,7 @@ export function useTripMeter() {
       setEstimatedFare(0);
       setFullNavPath([{ lat: pickupLocationRef.current.lat, lng: pickupLocationRef.current.lng, heading: vehicleHeading, streetName: pickupLocationRef.current.name }]);
     }
-  }, [destinationLocation, avoidTolls, fetchOsrmRoute, vehicleHeading]);
+  }, [destinationLocation, fetchOsrmRoute, vehicleHeading]);
 
   // Real Mobile GPS Tracking Handler
   useEffect(() => {
